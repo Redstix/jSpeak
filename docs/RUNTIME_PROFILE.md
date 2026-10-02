@@ -2,7 +2,7 @@
 
 ## 状态
 
-设备目标 Redmi Watch 5；技能给出的布局尺寸为 432×514，designWidth 432。实际固件、JS 引擎、音频 API 支持、可用内存尚待设备报告。模拟器或 Node 成功不能替代真机证据。
+设备目标 Redmi Watch 5；布局尺寸为 432×514，designWidth 432。首轮真机确认被测 TypedArray/DataView/Math.imul/shift 语义及包内 WAV 出声；API 返回 `ap / 0.0.0 / API1200`，真实固件与引擎仍不明确。包内 `.bin` 读取失败 202，内部文件与运行时生成音频由探针 0.2.0 继续验证。完整可用内存和实时合成能力尚未验证。详见 `docs/device-results/2026-10-02-probe-0.1.0.md`。
 
 ## 隔离
 

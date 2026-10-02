@@ -1,14 +1,16 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak 探针 0.1.0</text>
+    <text class="title">jSpeak 探针 0.2.0</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
         <text class="note">手动测试 / 非 TTS。请截图结果。</text>
         <input class="button" type="button" value="1 能力检查" onclick="checkCaps" />
         <input class="button" type="button" value="2 设备信息" onclick="checkDevice" />
-        <input class="button" type="button" value="3 读取 64KiB 资源" onclick="checkFile" />
-        <input class="button" type="button" value="4 分片计算" onclick="checkCompute" />
-        <input class="button" type="button" value="5 播放两秒测试音" onclick="playTone" />
+        <input class="button" type="button" value="3 包内资源对照" onclick="checkFile" />
+        <input class="button" type="button" value="4 内部文件写入/读回" onclick="checkInternal" />
+        <input class="button" type="button" value="5 分片计算 (可重复3次)" onclick="checkCompute" />
+        <input class="button" type="button" value="6 预置测试音 (旧路径)" onclick="playTone" />
+        <input class="button" type="button" value="7 JS生成双音并播放" onclick="playGenerated" />
         <input class="button" type="button" value="停止 / 取消" onclick="stopAll" />
         <text class="note">结果在下方；播放前降低设备音量。</text>
         <div class="result" for="item in results">
@@ -23,19 +25,31 @@
 import audio from '@system.audio'
 import file from '@system.file'
 import device from '@system.device'
-import { capabilities, computeSlice, validateResource } from '../../probe'
+import { capabilities, computeSlice, validateResource, validatePresetWav, timingSummary } from '../../probe'
+import { createTone } from '../../tone'
+import { scratchFile } from '../../scratch-file'
 
 export default {
   private: {
     results: [
-      { label: 'UI', value: 'READY 静态显示正常' },
-      { label: 'PCM streaming', value: 'UNVERIFIED 本版仅测文件播放' }
+      { label: 'UI / 版本', value: 'READY 0.2.0 / API1200 target' },
+      { label: 'PCM streaming', value: 'UNVERIFIED 本版仅测完整文件播放' }
     ]
   },
-  onInit() { this.generation = 0; this.timer = null; this.watchdog = null; this.activeLabel = null },
+  onInit() {
+    this.generation = 0
+    this.timer = null
+    this.watchdog = null
+    this.activeLabel = null
+    this.scratch = null
+    this.fileSeq = 0
+    this.computeRun = 0
+    this.destroyed = false
+  },
   onHide() { this.stopAll() },
-  onDestroy() { this.stopAll() },
+  onDestroy() { this.stopAll(); this.destroyed = true },
   setResult(label, value) {
+    if (this.destroyed) return
     var rows = this.results.slice()
     var found = false
     for (var i = 0; i < rows.length; i++) {
@@ -44,19 +58,28 @@ export default {
     if (!found) rows.push({ label: label, value: String(value) })
     this.results = rows
   },
+  stopAudio() {
+    try { audio.onplay = null; audio.onended = null; audio.onerror = null; audio.stop() }
+    catch (error) { this.setResult('停止音频', 'FAIL ' + String(error)) }
+  },
   stopAll() {
     this.generation++
     if (this.timer !== null) clearTimeout(this.timer)
     if (this.watchdog !== null) clearTimeout(this.watchdog)
     this.timer = null
     this.watchdog = null
-    try { audio.onplay = null; audio.onended = null; audio.onerror = null; audio.stop() } catch (error) {}
+    this.stopAudio()
+    if (this.scratch) this.scratch.cancel()
     if (this.activeLabel) this.setResult(this.activeLabel, 'CANCELLED')
     this.activeLabel = null
     this.setResult('会话', 'STOPPED；迟到回调已忽略')
   },
   begin(label) {
     this.stopAll()
+    if (this.scratch && this.scratch.isPending()) {
+      this.setResult(label, 'BUSY 上次文件I/O尚未返回，请稍后再试')
+      return null
+    }
     this.activeLabel = label
     this.setResult('会话', 'RUNNING ' + label)
     this.setResult(label, 'RUNNING')
@@ -71,10 +94,13 @@ export default {
   done(label, value, token) {
     if (token !== this.generation) return
     if (this.watchdog !== null) clearTimeout(this.watchdog)
+    if (this.timer !== null) clearTimeout(this.timer)
     this.watchdog = null
+    this.timer = null
     this.activeLabel = null
     this.generation++
-    try { audio.onplay = null; audio.onended = null; audio.onerror = null } catch (error) {}
+    this.stopAudio()
+    if (this.scratch) this.scratch.cancel()
     this.setResult(label, value)
     this.setResult('会话', 'DONE')
   },
@@ -85,63 +111,155 @@ export default {
   },
   checkDevice() {
     var token = this.begin('设备')
+    if (token === null) return
     try {
       device.getInfo({
-        success: (data) => this.done('设备', String(data.model) + ' / ' + String(data.osVersionName) + ' / API ' + String(data.platformVersionCode), token),
+        success: (data) => this.done('设备', String(data.model) + ' / ' + String(data.osVersionName) + ' / API ' + String(data.platformVersionCode) + ' (仅API返回值)', token),
         fail: (data, code) => this.done('设备', 'FAIL ' + String(code) + ' ' + String(data), token)
       })
     } catch (error) { this.done('设备', 'FAIL ' + String(error), token) }
   },
   checkFile() {
-    var token = this.begin('资源')
-    var started = Date.now()
+    var token = this.begin('资源对照')
+    if (token === null) return
+    var cases = [
+      { uri: '/common/probe.bin', label: '包内 .bin', validate: validateResource },
+      { uri: '/common/probe.dat', label: '包内 .dat', validate: validateResource },
+      { uri: '/common/tone.wav', label: '包内 WAV', validate: validatePresetWav }
+    ]
+    for (var n = 0; n < cases.length; n++) this.setResult(cases[n].label, 'WAITING')
+    var index = 0
+    var next = () => {
+      if (token !== this.generation) return
+      if (index === cases.length) { this.done('资源对照', 'DONE 请看各项结果 (WAV仅验证头部/长度)', token); return }
+      var item = cases[index++]
+      var started = Date.now()
+      var settled = false
+      this.setResult(item.label, 'RUNNING')
+      var finish = (value) => {
+        if (settled || token !== this.generation) return
+        settled = true
+        clearTimeout(this.timer)
+        this.timer = null
+        this.setResult(item.label, value + ' / ' + (Date.now() - started) + 'ms')
+        next()
+      }
+      this.timer = setTimeout(() => finish('FAIL timeout 3s'), 3000)
+      try {
+        file.readArrayBuffer({
+          uri: item.uri,
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try { finish(item.validate(data && data.buffer) ? 'PASS' : 'FAIL verify') }
+            catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        })
+      } catch (error) { finish('FAIL ' + String(error)) }
+    }
+    next()
+  },
+  runScratch(bytes, extension, label, token, play) {
+    this.fileSeq++
+    var uri = 'internal://files/jspeak-probe-020-' + Date.now() + '-' + this.fileSeq + '.' + extension
+    this.setResult(label + ' 路径', uri)
+    this.setResult(label + ' write', 'WAITING')
+    this.setResult(label + ' read', 'WAITING')
+    this.setResult('临时文件清理', 'WAITING')
+    var job = scratchFile(file, uri, bytes, {
+      stage: (stage, value) => { if (token === this.generation) this.setResult(label + ' ' + stage, value) },
+      ready: (path) => {
+        if (token !== this.generation) return
+        if (play) this.playUri(path, label, token)
+        else this.done(label, 'PASS 写入与逐字节读回一致', token)
+      },
+      error: (stage, message) => this.done(label, 'FAIL ' + stage + ' ' + message, token),
+      cleanup: (message) => { if (this.scratch === job) this.setResult('临时文件清理', message) }
+    })
+    this.scratch = job
+    job.start()
+  },
+  checkInternal() {
+    var token = this.begin('内部文件')
+    if (token === null) return
     try {
-      file.readArrayBuffer({
-        uri: '/common/probe.bin',
-        success: (data) => {
-          if (token !== this.generation) return
-          try { this.done('资源', (validateResource(data.buffer) ? 'PASS' : 'FAIL bytes') + ' ' + (Date.now() - started) + 'ms', token) }
-          catch (error) { this.done('资源', 'FAIL ' + String(error), token) }
-        },
-        fail: (data, code) => this.done('资源', 'FAIL ' + String(code) + ' ' + String(data), token)
-      })
-    } catch (error) { this.done('资源', 'FAIL ' + String(error), token) }
+      var bytes = new Uint8Array(65536)
+      for (var i = 0; i < bytes.length; i++) bytes[i] = i & 255
+      this.runScratch(bytes, 'bin', '内部文件', token, false)
+    } catch (error) { this.done('内部文件', 'FAIL ' + String(error), token) }
   },
   checkCompute() {
     var token = this.begin('计算')
+    if (token === null) return
+    this.computeRun++
+    var run = (this.computeRun - 1) % 3 + 1
     var state = 1
     var slices = 0
     var started = Date.now()
     var last = started
-    var maxGap = 0
-    var maxSlice = 0
+    var durations = []
+    var gaps = []
     var step = () => {
       if (token !== this.generation) return
-      var now = Date.now()
-      maxGap = Math.max(maxGap, now - last)
-      state = computeSlice(state, 2048)
-      var end = Date.now()
-      maxSlice = Math.max(maxSlice, end - now)
-      last = end
-      slices++
-      if (slices === 32) {
-        this.timer = null
-        this.done('计算', 'DONE 65536 ops / ' + (end - started) + 'ms; maxSlice=' + maxSlice + 'ms; gap=' + maxGap + 'ms; hash=' + state + ' (非RTF)', token)
-        return
-      }
-      this.timer = setTimeout(step, 10)
+      try {
+        var now = Date.now()
+        gaps.push(now - last)
+        state = computeSlice(state, 2048)
+        var end = Date.now()
+        durations.push(end - now)
+        last = end
+        slices++
+        if (slices === 32) {
+          var summary = timingSummary(durations, gaps)
+          this.setResult('计算 #' + run, (state === 437906867 ? 'PASS hash=' : 'FAIL hash=') + state + '; total=' + (end - started) + 'ms')
+          this.setResult('计算 #' + run + ' 分片', 'sum=' + summary.computeMs + 'ms; max=' + summary.maxSliceMs + 'ms; firstWait=' + summary.firstWaitMs + 'ms')
+          this.setResult('计算 #' + run + ' 后续等待', 'p50=' + summary.gapMedianMs + 'ms; p95=' + summary.gapP95Ms + 'ms; max=' + summary.gapMaxMs + 'ms (非RTF)')
+          this.done('计算', 'DONE 65536 ops; 结果槽位 #' + run, token)
+          return
+        }
+        this.timer = setTimeout(step, 10)
+      } catch (error) { this.done('计算', 'FAIL ' + String(error), token) }
     }
     this.timer = setTimeout(step, 10)
   },
+  playUri(uri, label, token) {
+    try {
+      audio.onplay = () => { if (token === this.generation) this.setResult(label, 'PLAY event；请确认是否听见') }
+      audio.onended = () => this.done(label, 'ENDED event；听感待用户确认', token)
+      audio.onerror = (error) => this.done(label, 'FAIL ' + String(error), token)
+      audio.src = uri
+      audio.play()
+    } catch (error) { this.done(label, 'FAIL ' + String(error), token) }
+  },
   playTone() {
     var token = this.begin('音频')
+    if (token !== null) this.playUri('/common/tone.wav', '音频', token)
+  },
+  playGenerated() {
+    var token = this.begin('JS双音')
+    if (token === null) return
     try {
-      audio.onplay = () => { if (token === this.generation) this.setResult('音频', 'PLAY event；请确认是否听见') }
-      audio.onended = () => this.done('音频', 'ENDED event；听感待用户确认', token)
-      audio.onerror = (error) => this.done('音频', 'FAIL ' + String(error), token)
-      audio.src = '/common/tone.wav'
-      audio.play()
-    } catch (error) { this.done('音频', 'FAIL ' + String(error), token) }
+      var tone = createTone()
+      var started = Date.now()
+      var computeMs = 0
+      var maxSlice = 0
+      var render = () => {
+        if (token !== this.generation) return
+        try {
+          var start = Date.now()
+          var complete = tone.renderSlice()
+          var spent = Date.now() - start
+          computeMs += spent
+          maxSlice = Math.max(maxSlice, spent)
+          if (complete) {
+            this.timer = null
+            this.setResult('JS双音 生成', '64044 bytes; total=' + (Date.now() - started) + 'ms; compute=' + computeMs + 'ms; maxSlice=' + maxSlice + 'ms')
+            this.runScratch(tone.bytes, 'wav', 'JS双音', token, true)
+          } else this.timer = setTimeout(render, 1)
+        } catch (error) { this.done('JS双音', 'FAIL ' + String(error), token) }
+      }
+      this.timer = setTimeout(render, 1)
+    } catch (error) { this.done('JS双音', 'FAIL ' + String(error), token) }
   }
 }
 </script>

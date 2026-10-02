@@ -5,6 +5,7 @@ mkdirSync(dir, { recursive: true });
 const bytes = Buffer.alloc(65536);
 for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
 writeFileSync(new URL('probe.bin', dir), bytes);
+writeFileSync(new URL('probe.dat', dir), bytes);
 const rate = 16000;
 const samples = rate * 2;
 const wav = Buffer.alloc(44 + samples * 2);
