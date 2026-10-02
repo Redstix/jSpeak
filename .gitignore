@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+artifacts/
+upstream/espeak-ng/
+*.log
+*.pem
+*.key
+session-*.md
+reports/local/
