@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/espeak-ng/espeak-ng",
+  "commit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "cmakeOptions": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_SHARED_LIBS=OFF", "-DUSE_LIBPCAUDIO=OFF", "-DUSE_LIBSONIC=OFF", "-DUSE_MBROLA=OFF", "-DUSE_SPEECHPLAYER=OFF", "-DUSE_ASYNC=OFF"],
+  "profile": { "voice": "en-us", "speed": 175, "pitch": 50, "amplitude": 100, "inputEncoding": "UTF-8" }
+}
