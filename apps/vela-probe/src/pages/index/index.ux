@@ -1,0 +1,158 @@
+<template>
+  <div class="page">
+    <text class="title">jSpeak 探针 0.1.0</text>
+    <scroll class="content" scroll-y="true">
+      <div class="body">
+        <text class="note">手动测试 / 非 TTS。请截图结果。</text>
+        <input class="button" type="button" value="1 能力检查" onclick="checkCaps" />
+        <input class="button" type="button" value="2 设备信息" onclick="checkDevice" />
+        <input class="button" type="button" value="3 读取 64KiB 资源" onclick="checkFile" />
+        <input class="button" type="button" value="4 分片计算" onclick="checkCompute" />
+        <input class="button" type="button" value="5 播放两秒测试音" onclick="playTone" />
+        <input class="button" type="button" value="停止 / 取消" onclick="stopAll" />
+        <text class="note">结果在下方；播放前降低设备音量。</text>
+        <div class="result" for="item in results">
+          <text class="label">{{item.label}}</text>
+          <text class="value">{{item.value}}</text>
+        </div>
+      </div>
+    </scroll>
+  </div>
+</template>
+<script>
+import audio from '@system.audio'
+import file from '@system.file'
+import device from '@system.device'
+import { capabilities, computeSlice, validateResource } from '../../probe'
+
+export default {
+  private: {
+    results: [
+      { label: 'UI', value: 'READY 静态显示正常' },
+      { label: 'PCM streaming', value: 'UNVERIFIED 本版仅测文件播放' }
+    ]
+  },
+  onInit() { this.generation = 0; this.timer = null; this.watchdog = null; this.activeLabel = null },
+  onHide() { this.stopAll() },
+  onDestroy() { this.stopAll() },
+  setResult(label, value) {
+    var rows = this.results.slice()
+    var found = false
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].label === label) { rows[i] = { label: label, value: String(value) }; found = true; break }
+    }
+    if (!found) rows.push({ label: label, value: String(value) })
+    this.results = rows
+  },
+  stopAll() {
+    this.generation++
+    if (this.timer !== null) clearTimeout(this.timer)
+    if (this.watchdog !== null) clearTimeout(this.watchdog)
+    this.timer = null
+    this.watchdog = null
+    try { audio.onplay = null; audio.onended = null; audio.onerror = null; audio.stop() } catch (error) {}
+    if (this.activeLabel) this.setResult(this.activeLabel, 'CANCELLED')
+    this.activeLabel = null
+    this.setResult('会话', 'STOPPED；迟到回调已忽略')
+  },
+  begin(label) {
+    this.stopAll()
+    this.activeLabel = label
+    this.setResult('会话', 'RUNNING ' + label)
+    this.setResult(label, 'RUNNING')
+    var token = this.generation
+    this.watchdog = setTimeout(() => {
+      if (token !== this.generation) return
+      this.stopAll()
+      this.setResult(label, 'FAIL timeout (10s)')
+    }, 10000)
+    return token
+  },
+  done(label, value, token) {
+    if (token !== this.generation) return
+    if (this.watchdog !== null) clearTimeout(this.watchdog)
+    this.watchdog = null
+    this.activeLabel = null
+    this.generation++
+    try { audio.onplay = null; audio.onended = null; audio.onerror = null } catch (error) {}
+    this.setResult(label, value)
+    this.setResult('会话', 'DONE')
+  },
+  checkCaps() {
+    this.stopAll()
+    var rows = capabilities()
+    for (var i = 0; i < rows.length; i++) this.setResult(rows[i].label, rows[i].value)
+  },
+  checkDevice() {
+    var token = this.begin('设备')
+    try {
+      device.getInfo({
+        success: (data) => this.done('设备', String(data.model) + ' / ' + String(data.osVersionName) + ' / API ' + String(data.platformVersionCode), token),
+        fail: (data, code) => this.done('设备', 'FAIL ' + String(code) + ' ' + String(data), token)
+      })
+    } catch (error) { this.done('设备', 'FAIL ' + String(error), token) }
+  },
+  checkFile() {
+    var token = this.begin('资源')
+    var started = Date.now()
+    try {
+      file.readArrayBuffer({
+        uri: '/common/probe.bin',
+        success: (data) => {
+          if (token !== this.generation) return
+          try { this.done('资源', (validateResource(data.buffer) ? 'PASS' : 'FAIL bytes') + ' ' + (Date.now() - started) + 'ms', token) }
+          catch (error) { this.done('资源', 'FAIL ' + String(error), token) }
+        },
+        fail: (data, code) => this.done('资源', 'FAIL ' + String(code) + ' ' + String(data), token)
+      })
+    } catch (error) { this.done('资源', 'FAIL ' + String(error), token) }
+  },
+  checkCompute() {
+    var token = this.begin('计算')
+    var state = 1
+    var slices = 0
+    var started = Date.now()
+    var last = started
+    var maxGap = 0
+    var maxSlice = 0
+    var step = () => {
+      if (token !== this.generation) return
+      var now = Date.now()
+      maxGap = Math.max(maxGap, now - last)
+      state = computeSlice(state, 2048)
+      var end = Date.now()
+      maxSlice = Math.max(maxSlice, end - now)
+      last = end
+      slices++
+      if (slices === 32) {
+        this.timer = null
+        this.done('计算', 'DONE 65536 ops / ' + (end - started) + 'ms; maxSlice=' + maxSlice + 'ms; gap=' + maxGap + 'ms; hash=' + state + ' (非RTF)', token)
+        return
+      }
+      this.timer = setTimeout(step, 10)
+    }
+    this.timer = setTimeout(step, 10)
+  },
+  playTone() {
+    var token = this.begin('音频')
+    try {
+      audio.onplay = () => { if (token === this.generation) this.setResult('音频', 'PLAY event；请确认是否听见') }
+      audio.onended = () => this.done('音频', 'ENDED event；听感待用户确认', token)
+      audio.onerror = (error) => this.done('音频', 'FAIL ' + String(error), token)
+      audio.src = '/common/tone.wav'
+      audio.play()
+    } catch (error) { this.done('音频', 'FAIL ' + String(error), token) }
+  }
+}
+</script>
+<style>
+.page { flex-direction: column; background-color: #101010; padding: 28px 24px; }
+.title { color: #ffffff; font-size: 25px; text-align: center; margin-bottom: 12px; }
+.content { flex-grow: 1; flex-direction: column; }
+.body { flex-direction: column; }
+.note { color: #cccccc; font-size: 19px; margin-bottom: 12px; }
+.button { height: 52px; margin-bottom: 10px; background-color: #303030; color: #ffffff; font-size: 21px; }
+.result { flex-direction: column; margin-bottom: 18px; }
+.label { color: #bbbbbb; font-size: 19px; }
+.value { color: #ffffff; font-size: 20px; }
+</style>

@@ -1,0 +1,7 @@
+{
+  "name": "jspeak-vela-probe",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "build": "aiot build", "assets": "node tools/generate-assets.mjs" },
+  "devDependencies": { "aiot-toolkit": "2.0.5", "@aiot-toolkit/jsc": "1.0.9" }
+}

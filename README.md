@@ -20,7 +20,16 @@ Node.js 24；使用 Node 内置测试运行器，无核心运行时依赖。
 npm test
 ```
 
-设备探针将位于 `apps/vela-probe/`，由用户安装 RPK 后反馈结果。源码提交不包括本地会话、私钥、上游 checkout、依赖及构建产物。
+设备探针位于 `apps/vela-probe/`，debug RPK 已构建，等待用户真机测试。安装步骤见 [探针说明](apps/vela-probe/README.md)。
+
+```sh
+npm run oracle:build  # 固定版本的 C 参考程序
+npm run test:oracle   # 22 例 C 自身重复性检查，不是 C/JS 兼容测试
+npm ci --prefix apps/vela-probe --registry=https://registry.npmjs.org
+npm run probe:build
+```
+
+源码提交不包括本地会话、私钥、上游 checkout、依赖及构建产物。参考程序说明见 [Oracle harness](tools/oracle/README.md)。
 
 ## 实施与状态
 
