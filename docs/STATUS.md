@@ -10,7 +10,8 @@
 - CLI smoke：22 输入，每例两个独立进程，音素文本与 WAV 哈希一致。空输入不生成 WAV 的行为显式记录。
 - Vela 探针 0.1.0：能力、设备信息、64KiB 资源、分片计算、文件测试音、取消/生命周期清理。
 - `npm test`：19 项单测通过；包括比较器、WAV、探针计算及 mock 生命周期测试。
-- `npm run probe:build`：debug RPK 构建成功；真机尚未测试。
+- `npm run probe:build`：debug RPK 构建成功；首轮真机截图确认基础能力通过，用户确认约 2 秒测试音。
+- 真机计算 hash `437906867` 与本地一致；资源读取失败 `202 invalid file type`。见 [首轮设备结果](device-results/2026-10-02-probe-0.1.0.md)。
 
 ## 已知限制
 
@@ -19,12 +20,12 @@
 - 探针只验证文件播放路线；原始 PCM streaming、真实 DSP RTF、峰值 heap 均未证实。
 - Node/mock 测试不能验证 UX 真机渲染、系统 API 支持或实际出声。
 - Vela 构建依赖安装报告 14 项 advisories（3 low、11 high），未盲目升级破坏 toolkit；见 THIRD_PARTY_NOTICES.md。
-- 未执行完整上游 C 测试套件、模拟器或真机测试。
+- 未执行完整上游 C 测试套件或模拟器；真机仅完成首轮基础测试，尚无合成性能验证。
 
 ## 下一步
 
-1. 用户安装 `apps/vela-probe/dist/org.jspeak.probe.debug.0.1.0.rpk`，按探针 README 截图反馈。
-2. 根据真机结果收敛音频输入、数据加载和 JS 子集，必要时调整探针。
+1. 首轮反馈已收到并归档；下一轮定位 `readArrayBuffer` 文件类型错误。
+2. 验证设备 JS 生成 WAV、内部文件写入与播放，并拆分首调度/计算/后续调度时间。
 3. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
 4. 推进 phonemizer 与代表性 DSP 切片；设备实测前不承诺实时可用。
 
