@@ -45,3 +45,28 @@ export function validateResource(bytes) {
   }
   return true;
 }
+
+export function validatePresetWav(bytes) {
+  if (!bytes || bytes.length !== 64044) return false;
+  var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return view.getUint32(0, false) === 0x52494646 &&
+    view.getUint32(8, false) === 0x57415645 &&
+    view.getUint32(24, true) === 16000 &&
+    view.getUint16(22, true) === 1 && view.getUint16(34, true) === 16 &&
+    view.getUint32(40, true) === 64000;
+}
+
+export function timingSummary(durations, gaps) {
+  if (durations.length !== 32 || gaps.length !== 32) throw new Error('Expected 32 slices');
+  var sum = 0;
+  var max = 0;
+  for (var i = 0; i < durations.length; i++) {
+    sum += durations[i];
+    max = Math.max(max, durations[i]);
+  }
+  var sorted = gaps.slice(1).sort(function (a, b) { return a - b; });
+  return {
+    computeMs: sum, maxSliceMs: max, firstWaitMs: gaps[0],
+    gapMedianMs: sorted[15], gapP95Ms: sorted[29], gapMaxMs: sorted[30]
+  };
+}
