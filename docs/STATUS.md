@@ -17,6 +17,7 @@
 - 包内资源 bin/dat/wav 三类均 readArrayBuffer 失败 `202 invalid file type`；同 API 读内部 bin/wav 成功。失败已收敛到包内资源路径，非扩展名问题。
 - 分片计算 #1：total 475ms，测量窗口累计 67ms，maxSlice 4ms，首次调度等待 158ms，后续等待 p50/p95/max = 8/9/9ms。无双音的 #2/#3 独立测量证据。
 - JS 双音生成：total 534ms / 63 片 / 2s 音频，maxSlice 77ms（原因未定位；非 eSpeak DSP，不代表合成 RTF）。
+- 包内资源根因调查（2026-10-04，官方契约直接核对）：readText/readArrayBuffer 明文支持应用资源路径；write 系列明文排除资源路径；**file.copy 的 srcUri 无限制条款**——“包内→internal 复制”成为首要候选装载出口；readText/copy/access 的包内行为设备未测。判别矩阵与决策树见 [调研记录](research/2026-10-04-vela-file-api-package-resources.md)。术语修正：目标平台为 Vela JS 应用（官方站点自名，非手机快应用联盟规范）。
 
 ## 已知限制
 
@@ -32,7 +33,7 @@
 
 ## 下一步
 
-1. 根因调查包内资源读取：核验 `@system.file` readArrayBuffer 支持的 URI 前缀与 202 语义；调查替代途径（fetch、manifest 资源声明、构建期 JS 数据模块——后者必须测包体、启动峰值内存、解析耗时），不默认其适合大型词典。
+1. 构建探针 0.3.0 判别矩阵：readText/readArrayBuffer 包内 .txt、access、copy→internal 复制读回校验、大写路径变体、internal position/length 部分读；按[装载方案决策树](research/2026-10-04-vela-file-api-package-resources.md)定词典/音素表数据装载出口。
 2. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
 3. 推进 phonemizer 与代表性 DSP 重放切片；真实 DSP 基准保留首次等待、分片测量窗口与总耗时，定位 77ms 异常片。设备实测前不承诺实时可用。
 
