@@ -70,3 +70,24 @@ export function timingSummary(durations, gaps) {
     gapMedianMs: sorted[15], gapP95Ms: sorted[29], gapMaxMs: sorted[30]
   };
 }
+
+// Integer hash built on the same xorshift core as computeSlice: every byte (or
+// char code) is mixed into the state with one full computeSlice round. Works on
+// Uint8Array and string sources; Node and the device runtime produce identical
+// values. Constants below were computed locally from the packaged files with
+// this exact function.
+export function hashBytes(source, start, end, seed) {
+  var state = seed | 0;
+  for (var i = start; i < end; i++) {
+    var value = typeof source === 'string' ? source.charCodeAt(i) : source[i] | 0;
+    state = computeSlice(state ^ value, 1);
+  }
+  return state;
+}
+
+// Hashes used by the 0.3.0 file API discrimination rows to verify copies and
+// partial reads on device. Recompute with tests/probe.test.mjs if assets change.
+export var PROBE_BIN_HASH = 259309834;
+export var TEST_TXT_TEXT_HASH = 975296040;
+export var TEST_TXT_BYTES_HASH = 975296040;
+export var SLICE_HASH = 1037292089;

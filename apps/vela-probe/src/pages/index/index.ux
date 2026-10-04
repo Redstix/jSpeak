@@ -1,18 +1,16 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak 探针 0.2.0</text>
+    <text class="title">jSpeak 探针 0.3.0</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
         <text class="note">手动测试 / 非 TTS。请截图结果。</text>
         <input class="button" type="button" value="1 能力检查" onclick="checkCaps" />
         <input class="button" type="button" value="2 设备信息" onclick="checkDevice" />
         <input class="button" type="button" value="3 包内资源对照" onclick="checkFile" />
-        <input class="button" type="button" value="4 内部文件写入/读回" onclick="checkInternal" />
-        <input class="button" type="button" value="5 分片计算 (可重复3次)" onclick="checkCompute" />
-        <input class="button" type="button" value="6 预置测试音 (旧路径)" onclick="playTone" />
-        <input class="button" type="button" value="7 JS生成双音并播放" onclick="playGenerated" />
+        <input class="button" type="button" value="4 分片计算 (可重复3次)" onclick="checkCompute" />
+        <input class="button" type="button" value="5 文件API判别" onclick="checkFileApi" />
         <input class="button" type="button" value="停止 / 取消" onclick="stopAll" />
-        <text class="note">结果在下方；播放前降低设备音量。</text>
+        <text class="note">结果在下方；BUSY 表示上次文件I/O未返回。</text>
         <div class="result" for="item in results">
           <text class="label">{{item.label}}</text>
           <text class="value">{{item.value}}</text>
@@ -25,15 +23,14 @@
 import audio from '@system.audio'
 import file from '@system.file'
 import device from '@system.device'
-import { capabilities, computeSlice, validateResource, validatePresetWav, timingSummary } from '../../probe'
-import { createTone } from '../../tone'
-import { scratchFile } from '../../scratch-file'
+import { capabilities, computeSlice, validateResource, validatePresetWav, timingSummary, hashBytes, PROBE_BIN_HASH, SLICE_HASH } from '../../probe'
+import { scratchFile, copyFile } from '../../scratch-file'
 
 export default {
   private: {
     results: [
-      { label: 'UI / 版本', value: 'READY 0.2.0 / API1200 target' },
-      { label: 'PCM streaming', value: 'UNVERIFIED 本版仅测完整文件播放' }
+      { label: 'UI / 版本', value: 'READY 0.3.0 / API1200 target' },
+      { label: 'PCM streaming', value: 'UNVERIFIED 本版无音频播放' }
     ]
   },
   onInit() {
@@ -74,7 +71,7 @@ export default {
     this.activeLabel = null
     this.setResult('会话', 'STOPPED；迟到回调已忽略')
   },
-  begin(label) {
+  begin(label, watchdogMs) {
     this.stopAll()
     if (this.scratch && this.scratch.isPending()) {
       this.setResult(label, 'BUSY 上次文件I/O尚未返回，请稍后再试')
@@ -87,8 +84,8 @@ export default {
     this.watchdog = setTimeout(() => {
       if (token !== this.generation) return
       this.stopAll()
-      this.setResult(label, 'FAIL timeout (10s)')
-    }, 10000)
+      this.setResult(label, 'FAIL timeout (' + (watchdogMs || 10000) / 1000 + 's)')
+    }, watchdogMs || 10000)
     return token
   },
   done(label, value, token) {
@@ -159,35 +156,6 @@ export default {
     }
     next()
   },
-  runScratch(bytes, extension, label, token, play) {
-    this.fileSeq++
-    var uri = 'internal://files/jspeak-probe-020-' + Date.now() + '-' + this.fileSeq + '.' + extension
-    this.setResult(label + ' 路径', uri)
-    this.setResult(label + ' write', 'WAITING')
-    this.setResult(label + ' read', 'WAITING')
-    this.setResult('临时文件清理', 'WAITING')
-    var job = scratchFile(file, uri, bytes, {
-      stage: (stage, value) => { if (token === this.generation) this.setResult(label + ' ' + stage, value) },
-      ready: (path) => {
-        if (token !== this.generation) return
-        if (play) this.playUri(path, label, token)
-        else this.done(label, 'PASS 写入与逐字节读回一致', token)
-      },
-      error: (stage, message) => this.done(label, 'FAIL ' + stage + ' ' + message, token),
-      cleanup: (message) => { if (this.scratch === job) this.setResult('临时文件清理', message) }
-    })
-    this.scratch = job
-    job.start()
-  },
-  checkInternal() {
-    var token = this.begin('内部文件')
-    if (token === null) return
-    try {
-      var bytes = new Uint8Array(65536)
-      for (var i = 0; i < bytes.length; i++) bytes[i] = i & 255
-      this.runScratch(bytes, 'bin', '内部文件', token, false)
-    } catch (error) { this.done('内部文件', 'FAIL ' + String(error), token) }
-  },
   checkCompute() {
     var token = this.begin('计算')
     if (token === null) return
@@ -222,44 +190,159 @@ export default {
     }
     this.timer = setTimeout(step, 10)
   },
-  playUri(uri, label, token) {
-    try {
-      audio.onplay = () => { if (token === this.generation) this.setResult(label, 'PLAY event；请确认是否听见') }
-      audio.onended = () => this.done(label, 'ENDED event；听感待用户确认', token)
-      audio.onerror = (error) => this.done(label, 'FAIL ' + String(error), token)
-      audio.src = uri
-      audio.play()
-    } catch (error) { this.done(label, 'FAIL ' + String(error), token) }
-  },
-  playTone() {
-    var token = this.begin('音频')
-    if (token !== null) this.playUri('/common/tone.wav', '音频', token)
-  },
-  playGenerated() {
-    var token = this.begin('JS双音')
+  checkFileApi() {
+    var token = this.begin('文件判别', 35000)
     if (token === null) return
-    try {
-      var tone = createTone()
+    var labels = [
+      'B1 readText .txt',
+      'B2 readAB .txt',
+      'B3 access .bin',
+      'B4 copy→internal',
+      'B5 copy读回',
+      'B6 大写 /Common',
+      'B7 internal部分读'
+    ]
+    for (var n = 0; n < labels.length; n++) this.setResult(labels[n], 'WAITING')
+    var index = 0
+    var copyDst = null
+    var copyOk = false
+    var copyJob = null
+    var next = () => {
+      if (token !== this.generation) return
+      if (index === labels.length) { this.done('文件判别', 'DONE 请看各项结果', token); return }
+      var label = labels[index++]
       var started = Date.now()
-      var computeMs = 0
-      var maxSlice = 0
-      var render = () => {
-        if (token !== this.generation) return
-        try {
-          var start = Date.now()
-          var complete = tone.renderSlice()
-          var spent = Date.now() - start
-          computeMs += spent
-          maxSlice = Math.max(maxSlice, spent)
-          if (complete) {
-            this.timer = null
-            this.setResult('JS双音 生成', '64044 bytes; total=' + (Date.now() - started) + 'ms; compute=' + computeMs + 'ms; maxSlice=' + maxSlice + 'ms')
-            this.runScratch(tone.bytes, 'wav', 'JS双音', token, true)
-          } else this.timer = setTimeout(render, 1)
-        } catch (error) { this.done('JS双音', 'FAIL ' + String(error), token) }
+      var settled = false
+      var stepTimeout = label === 'B7 internal部分读' ? 9000 : 3000
+      this.setResult(label, 'RUNNING')
+      var finish = (value) => {
+        if (settled || token !== this.generation) return
+        settled = true
+        clearTimeout(this.timer)
+        this.timer = null
+        this.setResult(label, value + ' / ' + (Date.now() - started) + 'ms')
+        next()
       }
-      this.timer = setTimeout(render, 1)
-    } catch (error) { this.done('JS双音', 'FAIL ' + String(error), token) }
+      var guard = (run) => { try { run() } catch (error) { finish('FAIL ' + String(error)) } }
+      this.timer = setTimeout(() => finish('FAIL timeout ' + stepTimeout / 1000 + 's'), stepTimeout)
+      if (label === 'B1 readText .txt') {
+        guard(() => file.readText({
+          uri: '/common/test.txt',
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try {
+              var text = data && data.text
+              finish(text ? 'PASS len=' + text.length + ' hash=' + hashBytes(text, 0, text.length, 1) : 'FAIL empty text')
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else if (label === 'B2 readAB .txt') {
+        guard(() => file.readArrayBuffer({
+          uri: '/common/test.txt',
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try {
+              var arr = data && data.buffer
+              finish(arr ? 'PASS bytes=' + arr.length + ' hash=' + hashBytes(arr, 0, arr.length, 1) : 'FAIL empty buffer')
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else if (label === 'B3 access .bin') {
+        guard(() => file.access({
+          uri: '/common/probe.bin',
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            finish('PASS exists=' + String(data && data.exists))
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else if (label === 'B4 copy→internal') {
+        guard(() => {
+          this.fileSeq++
+          copyDst = 'internal://files/jspeak-probe-030-' + Date.now() + '-' + this.fileSeq + '-c.bin'
+          copyOk = false
+          copyJob = copyFile(file, '/common/probe.bin', copyDst, {
+            ready: (path) => {
+              if (settled || token !== this.generation) return
+              copyOk = true
+              finish('PASS ' + path)
+            },
+            error: (stage, message) => finish('FAIL ' + stage + ' ' + message),
+            cleanup: (message) => { if (this.scratch === copyJob) this.setResult('临时文件清理', message) }
+          })
+          this.scratch = copyJob
+          copyJob.start()
+        })
+      } else if (label === 'B5 copy读回') {
+        guard(() => {
+          if (!copyOk) { finish('SKIPPED'); return }
+          file.readArrayBuffer({
+            uri: copyDst,
+            success: (data) => {
+              if (settled || token !== this.generation) return
+              try {
+                var arr = data && data.buffer
+                var ok = !!arr && arr.length === 65536 && hashBytes(arr, 0, arr.length, 1) === PROBE_BIN_HASH
+                if (copyJob) copyJob.cancel()
+                finish(ok ? 'PASS hash=' + PROBE_BIN_HASH : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none'))
+              } catch (error) { finish('FAIL ' + String(error)) }
+            },
+            fail: (data, code) => { if (copyJob) copyJob.cancel(); finish('FAIL ' + String(code) + ' ' + String(data)) }
+          })
+        })
+      } else if (label === 'B6 大写 /Common') {
+        guard(() => file.readArrayBuffer({
+          uri: '/Common/probe.bin',
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try {
+              var arr = data && data.buffer
+              finish(arr ? 'PASS bytes=' + arr.length + ' hash=' + hashBytes(arr, 0, arr.length, 1) : 'FAIL empty buffer')
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else {
+        guard(() => this.runSliceProbe(token, finish))
+      }
+    }
+    next()
+  },
+  runSliceProbe(token, finish) {
+    this.fileSeq++
+    var uri = 'internal://files/jspeak-probe-030-' + Date.now() + '-' + this.fileSeq + '.bin'
+    this.setResult('B7 scratch 路径', uri)
+    var bytes = new Uint8Array(65536)
+    for (var i = 0; i < bytes.length; i++) bytes[i] = i & 255
+    this.setResult('B7 scratch write', 'WAITING')
+    this.setResult('B7 scratch read', 'WAITING')
+    this.setResult('临时文件清理', 'WAITING')
+    var job = scratchFile(file, uri, bytes, {
+      stage: (stage, value) => { if (token === this.generation) this.setResult('B7 scratch ' + stage, value) },
+      ready: (path) => {
+        if (token !== this.generation) return
+        file.readArrayBuffer({
+          uri: path,
+          position: 1024,
+          length: 2048,
+          success: (data) => {
+            if (token !== this.generation) return
+            try {
+              var arr = data && data.buffer
+              var ok = !!arr && arr.length === 2048 && hashBytes(arr, 0, arr.length, 1) === SLICE_HASH
+              finish(ok ? 'PASS hash=' + SLICE_HASH : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none'))
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        })
+      },
+      error: (stage, message) => finish('FAIL ' + stage + ' ' + message),
+      cleanup: (message) => { if (this.scratch === job) this.setResult('临时文件清理', message) }
+    })
+    this.scratch = job
+    job.start()
   }
 }
 </script>

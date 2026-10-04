@@ -18,6 +18,7 @@
 - 分片计算 #1：total 475ms，测量窗口累计 67ms，maxSlice 4ms，首次调度等待 158ms，后续等待 p50/p95/max = 8/9/9ms。无双音的 #2/#3 独立测量证据。
 - JS 双音生成：total 534ms / 63 片 / 2s 音频，maxSlice 77ms（原因未定位；非 eSpeak DSP，不代表合成 RTF）。
 - 包内资源根因调查（2026-10-04，官方契约直接核对）：readText/readArrayBuffer 明文支持应用资源路径；write 系列明文排除资源路径；**file.copy 的 srcUri 无限制条款**——“包内→internal 复制”成为首要候选装载出口；readText/copy/access 的包内行为设备未测。判别矩阵与决策树见 [调研记录](research/2026-10-04-vela-file-api-package-resources.md)。术语修正：目标平台为 Vela JS 应用（官方站点自名，非手机快应用联盟规范）。
+- 探针 0.3.0 已构建：文件 API 判别矩阵 7 行（B1 包内 .txt readText / B2 .txt readArrayBuffer / B3 access / B4 copy→internal / B5 复制读回校验 / B6 大写 /Common/ / B7 internal position/length 部分读）+ 4 个 hash 校验常量；`npm test` 40 项全过。审查发现并修复 copy 参数名错误（官方契约为 `dstUri`，初版实现误传 `uri`，真机上会使 B4 恒 202、误导出口结论）。交付 RPK SHA256 `da260c6df3e947f93b015d3e19cdb90a25ba9e551edb996765204b8dd84a7d55`（dist/ 不入 git，以此为准；0.3.0 重建清空 dist，0.2.0 磁盘产物已移除，其出处以提交 `883bd7f` 与文档记录为准）。
 
 ## 已知限制
 
@@ -33,7 +34,7 @@
 
 ## 下一步
 
-1. 构建探针 0.3.0 判别矩阵：readText/readArrayBuffer 包内 .txt、access、copy→internal 复制读回校验、大写路径变体、internal position/length 部分读；按[装载方案决策树](research/2026-10-04-vela-file-api-package-resources.md)定词典/音素表数据装载出口。
+1. 用户真机运行探针 0.3.0「文件API判别」节（B1–B7），据结果走[装载方案决策树](research/2026-10-04-vela-file-api-package-resources.md)：B4+B5 通过 → 包内复制出口；B4 ✗ 而 B1 ✓ → 文本编码数据；全 ✗ → 构建期 JS 数据模块或 interconnect 导入。
 2. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
 3. 推进 phonemizer 与代表性 DSP 重放切片；真实 DSP 基准保留首次等待、分片测量窗口与总耗时，定位 77ms 异常片。设备实测前不承诺实时可用。
 

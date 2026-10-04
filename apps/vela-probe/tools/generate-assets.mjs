@@ -6,6 +6,15 @@ const bytes = Buffer.alloc(65536);
 for (let i = 0; i < bytes.length; i++) bytes[i] = i & 255;
 writeFileSync(new URL('probe.bin', dir), bytes);
 writeFileSync(new URL('probe.dat', dir), bytes);
+// 512 bytes of deterministic ASCII for the file API discrimination rows.
+// 8 fixed-width lines; byte-identical across runs.
+const lines = [];
+for (let n = 0; n < 8; n++) {
+  lines.push(('jspeak-probe-030 line ' + String(n).padStart(2, '0') + ' padding ').padEnd(64, '#'));
+}
+const txt = Buffer.from(lines.join(''), 'ascii');
+if (txt.length !== 512) throw new Error('test.txt must be exactly 512 bytes, got ' + txt.length);
+writeFileSync(new URL('test.txt', dir), txt);
 const rate = 16000;
 const samples = rate * 2;
 const wav = Buffer.alloc(44 + samples * 2);
@@ -44,4 +53,4 @@ for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) {
 }
 const header = Buffer.alloc(13); header.writeUInt32BE(width); header.writeUInt32BE(width, 4); header[8] = 8; header[9] = 2;
 writeFileSync(new URL('logo.png', dir), Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', header), chunk('IDAT', deflateSync(pixels)), chunk('IEND', Buffer.alloc(0))]));
-console.log('Generated 64 KiB resource, 2s PCM16 WAV, and project icon');
+console.log('Generated 64 KiB resource, 512-byte ASCII probe text, 2s PCM16 WAV, and project icon');
