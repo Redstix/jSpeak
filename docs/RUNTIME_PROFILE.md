@@ -4,7 +4,7 @@
 
 设备目标 Redmi Watch 5；布局尺寸为 432×514，designWidth 432。两轮真机已确认被测 TypedArray/DataView/Math.imul/shift 语义、包内 WAV 出声（0.1.0 用户确认）与计算 hash 跨端一致；API 返回 `ap / 0.0.0 / API1200`，真实固件与引擎仍不明确。
 
-第二轮真机结果（`docs/device-results/2026-10-02-probe-0.2.0.md`）：内部文件二进制 I/O 可用——64KiB `.bin` 与 64044 字节运行期生成 `.wav` 均写入后全字节读回一致；JS 生成双音 WAV 播放收到 ENDED 事件（人工双音听感待确认）。内部完整 WAV 文件因此成为已部分验证的音频出口，但不构成 streaming 能力。包内资源 bin/dat/wav 三类 readArrayBuffer 均失败 `202 invalid file type`，而内部 bin/wav 成功：限制收敛在包内资源路径，词典等静态数据装载方案仍待核验。完整可用内存和实时合成能力尚未验证；简单正弦生成 534ms/2s 不属于 eSpeak DSP 基准。
+第二轮真机结果（`docs/device-results/2026-10-02-probe-0.2.0.md`）：内部文件二进制 I/O 可用——64KiB `.bin` 与 64044 字节运行期生成 `.wav` 均写入后全字节读回一致；JS 生成双音 WAV 播放收到 ENDED 事件，用户确认听到低音—停顿—高音、顺序正确。内部完整 WAV 文件因此成为已部分验证的音频出口，但不构成 streaming 能力。包内资源 bin/dat/wav 三类 readArrayBuffer 均失败 `202 invalid file type`，而内部 bin/wav 成功：限制收敛在 file API 读取包内路径（文件确在 RPK 内、audio src 可播放包内 WAV），词典等静态数据装载方案仍待核验。完整可用内存和实时合成能力尚未验证；简单正弦生成 534ms/2s 不属于 eSpeak DSP 基准。
 
 ## 隔离
 
