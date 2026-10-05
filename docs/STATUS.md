@@ -20,6 +20,7 @@
 - 包内资源根因调查（2026-10-04，官方契约直接核对）：readText/readArrayBuffer 明文支持应用资源路径；write 系列明文排除资源路径；**file.copy 的 srcUri 无限制条款**——“包内→internal 复制”成为首要候选装载出口；readText/copy/access 的包内行为设备未测。判别矩阵与决策树见 [调研记录](research/2026-10-04-vela-file-api-package-resources.md)。术语修正：目标平台为 Vela JS 应用（官方站点自名，非手机快应用联盟规范）。
 - 探针 0.3.0 已构建：判别矩阵 7 行 + 4 个 hash 常量；`npm test` 40 项全过；审查修复 copy 参数名错误（官方契约 `dstUri`，初版误传 `uri`，会使 B4 恒 202 误导结论）。交付 RPK SHA256 `da260c6df3e947f93b015d3e19cdb90a25ba9e551edb996765204b8dd84a7d55`（dist/ 不入 git；0.2.0 磁盘产物已被重建清除，出处以 `883bd7f` 与文档为准）。
 - 探针 0.3.0 真机结果（用户逐行转录，见 [第三轮设备结果](device-results/2026-10-04-probe-0.3.0.md)）：**包内 .txt 资源 readText/readArrayBuffer 双 PASS**（hash 跨端一致）；`.bin` 扩展名仍 202（大小写不敏感）→ "invalid file type" 是**基于文件类型的校验**，非资源路径整体拒绝（修正 0.2.0 C+ 推断）；internal `position/length` 部分读 PASS（词典随机访问原语就绪，64KiB 全链 1807ms）；access(.bin) 与 copy(.bin→internal) 原生报错（copy 存在构建身份歧义，0.3.1 构建戳+C5 复测消歧）；整节 DONE、清理 PASS。装载首选方案修正为"文本扩展名直读"。
+- 探针 0.3.1 已构建：装载判别矩阵 C1–C6（.txt 名二进制 64KiB/256KiB 直读、包内部分读、copy .txt 源、copy .bin 源复测、access .txt）+ 新常量 BIG_TXT_HASH=534463728；**构建戳机制**（页头 `READY 0.3.1 <stamp>`，stamp→SHA256 映射入 README，交付消歧——B4 教训落地）；`npm test` 42 项全过（根 pretest 自动生成 stamp/assets）。交付 RPK SHA256 `d93fe1c6826f9eeccc81b9f5c9a3a74909318e0a7aa90805e30f8d6720e550f7`，构建戳 `B261005T013207`——转录页头即可确认安装构建。
 
 ## 已知限制
 
@@ -35,7 +36,7 @@
 
 ## 下一步
 
-1. 构建探针 0.3.1「装载判别」矩阵：构建戳入页头（交付消歧，B4 教训）；C1 .txt 名二进制 64KiB 直读（内容嗅探 vs 扩展名）、C2 .txt 名二进制 256KiB（尺度）、C3 包内路径部分读、C4 copy(.txt 源)→internal、C5 copy(.bin 源) 复测消歧、C6 access(.txt)。结果定案词典/音素表装载层设计。
+1. 用户真机运行 0.3.1「装载判别」（按钮 4），转录含构建戳的版本头与 C1–C6 各行结果：C1+C2+C3 PASS → 装载层按"包内 .txt 直读 + 可选 internal 缓存"定案；C4/C5 判定 copy 出口（同时消解 0.3.0 B4 歧义）；C6 判定 access 可用性。
 2. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
 3. 推进 phonemizer 与代表性 DSP 重放切片；真实 DSP 基准保留首次等待、分片测量窗口与总耗时，定位 77ms 异常片。设备实测前不承诺实时可用。
 

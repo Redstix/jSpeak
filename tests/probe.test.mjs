@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../apps/vela-probe/src/probe.js', import.meta.url), 'utf8');
-const { capabilities, computeSlice, validateResource, timingSummary, hashBytes, PROBE_BIN_HASH, TEST_TXT_TEXT_HASH, TEST_TXT_BYTES_HASH, SLICE_HASH } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const { capabilities, computeSlice, validateResource, timingSummary, hashBytes, PROBE_BIN_HASH, TEST_TXT_TEXT_HASH, TEST_TXT_BYTES_HASH, SLICE_HASH, BIG_TXT_HASH } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 
 test('probe capability semantics pass on Node (not a device result)', () => {
   assert.equal(capabilities().length, 4);
@@ -76,4 +76,26 @@ test('SLICE_HASH locks the B7 partial read window of the packaged pattern', () =
   for (let i = 0; i < pattern.length; i++) pattern[i] = i & 255;
   assert.equal(hashBytes(pattern, 1024, 3072, 1), SLICE_HASH);
   assert.equal(hashBytes(bin, 1024, 3072, 1), SLICE_HASH);
+});
+
+test('bin.txt bytes match probe.bin by construction and lock the same constants', () => {
+  const binTxt = readFileSync(new URL('../apps/vela-probe/src/common/bin.txt', import.meta.url));
+  const bin = readFileSync(new URL('../apps/vela-probe/src/common/probe.bin', import.meta.url));
+  assert.equal(binTxt.length, 65536);
+  assert.equal(Buffer.compare(binTxt, bin), 0);
+  assert.equal(hashBytes(binTxt, 0, 65536, 1), PROBE_BIN_HASH);
+  assert.equal(hashBytes(binTxt, 1024, 3072, 1), SLICE_HASH);
+});
+
+test('BIG_TXT_HASH locks the real 256 KiB big.txt payload', () => {
+  const big = readFileSync(new URL('../apps/vela-probe/src/common/big.txt', import.meta.url));
+  assert.equal(big.length, 262144);
+  assert.equal(hashBytes(big, 0, 262144, 1), BIG_TXT_HASH);
+});
+
+test('build stamp exists with the bounded deterministic format', () => {
+  const stamp = readFileSync(new URL('../apps/vela-probe/src/build-stamp.js', import.meta.url), 'utf8');
+  const match = stamp.match(/BUILD_STAMP = '(B\d{6}T\d{6})'/);
+  assert.ok(match, 'build-stamp.js must export BUILD_STAMP as B<yyMMdd>T<HHmmss>');
+  assert.equal(match[1].length, 14);
 });

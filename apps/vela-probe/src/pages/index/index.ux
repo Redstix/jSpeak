@@ -1,14 +1,13 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak 探针 0.3.0</text>
+    <text class="title">jSpeak 探针 0.3.1</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
         <text class="note">手动测试 / 非 TTS。请截图结果。</text>
         <input class="button" type="button" value="1 能力检查" onclick="checkCaps" />
         <input class="button" type="button" value="2 设备信息" onclick="checkDevice" />
-        <input class="button" type="button" value="3 包内资源对照" onclick="checkFile" />
-        <input class="button" type="button" value="4 分片计算 (可重复3次)" onclick="checkCompute" />
-        <input class="button" type="button" value="5 文件API判别" onclick="checkFileApi" />
+        <input class="button" type="button" value="3 分片计算 (可重复3次)" onclick="checkCompute" />
+        <input class="button" type="button" value="4 装载判别" onclick="checkLoad" />
         <input class="button" type="button" value="停止 / 取消" onclick="stopAll" />
         <text class="note">结果在下方；BUSY 表示上次文件I/O未返回。</text>
         <div class="result" for="item in results">
@@ -23,13 +22,14 @@
 import audio from '@system.audio'
 import file from '@system.file'
 import device from '@system.device'
-import { capabilities, computeSlice, validateResource, validatePresetWav, timingSummary, hashBytes, PROBE_BIN_HASH, SLICE_HASH } from '../../probe'
-import { scratchFile, copyFile } from '../../scratch-file'
+import { capabilities, computeSlice, timingSummary, hashBytes, PROBE_BIN_HASH, BIG_TXT_HASH, SLICE_HASH } from '../../probe'
+import { copyFile } from '../../scratch-file'
+import { BUILD_STAMP } from '../../build-stamp'
 
 export default {
   private: {
     results: [
-      { label: 'UI / 版本', value: 'READY 0.3.0 / API1200 target' },
+      { label: 'UI / 版本', value: 'READY 0.3.1 ' + BUILD_STAMP + ' / API1200 target' },
       { label: 'PCM streaming', value: 'UNVERIFIED 本版无音频播放' }
     ]
   },
@@ -116,46 +116,6 @@ export default {
       })
     } catch (error) { this.done('设备', 'FAIL ' + String(error), token) }
   },
-  checkFile() {
-    var token = this.begin('资源对照')
-    if (token === null) return
-    var cases = [
-      { uri: '/common/probe.bin', label: '包内 .bin', validate: validateResource },
-      { uri: '/common/probe.dat', label: '包内 .dat', validate: validateResource },
-      { uri: '/common/tone.wav', label: '包内 WAV', validate: validatePresetWav }
-    ]
-    for (var n = 0; n < cases.length; n++) this.setResult(cases[n].label, 'WAITING')
-    var index = 0
-    var next = () => {
-      if (token !== this.generation) return
-      if (index === cases.length) { this.done('资源对照', 'DONE 请看各项结果 (WAV仅验证头部/长度)', token); return }
-      var item = cases[index++]
-      var started = Date.now()
-      var settled = false
-      this.setResult(item.label, 'RUNNING')
-      var finish = (value) => {
-        if (settled || token !== this.generation) return
-        settled = true
-        clearTimeout(this.timer)
-        this.timer = null
-        this.setResult(item.label, value + ' / ' + (Date.now() - started) + 'ms')
-        next()
-      }
-      this.timer = setTimeout(() => finish('FAIL timeout 3s'), 3000)
-      try {
-        file.readArrayBuffer({
-          uri: item.uri,
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try { finish(item.validate(data && data.buffer) ? 'PASS' : 'FAIL verify') }
-            catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        })
-      } catch (error) { finish('FAIL ' + String(error)) }
-    }
-    next()
-  },
   checkCompute() {
     var token = this.begin('计算')
     if (token === null) return
@@ -190,30 +150,26 @@ export default {
     }
     this.timer = setTimeout(step, 10)
   },
-  checkFileApi() {
-    var token = this.begin('文件判别', 35000)
+  checkLoad() {
+    var token = this.begin('装载判别', 35000)
     if (token === null) return
     var labels = [
-      'B1 readText .txt',
-      'B2 readAB .txt',
-      'B3 access .bin',
-      'B4 copy→internal',
-      'B5 copy读回',
-      'B6 大写 /Common',
-      'B7 internal部分读'
+      'C1 bin.txt直读',
+      'C2 big.txt直读',
+      'C3 包内部分读',
+      'C4 copy .txt源',
+      'C5 copy .bin源',
+      'C6 access .txt'
     ]
     for (var n = 0; n < labels.length; n++) this.setResult(labels[n], 'WAITING')
     var index = 0
-    var copyDst = null
-    var copyOk = false
-    var copyJob = null
     var next = () => {
       if (token !== this.generation) return
-      if (index === labels.length) { this.done('文件判别', 'DONE 请看各项结果', token); return }
+      if (index === labels.length) { this.done('装载判别', 'DONE 请看各项结果', token); return }
       var label = labels[index++]
       var started = Date.now()
       var settled = false
-      var stepTimeout = label === 'B7 internal部分读' ? 9000 : 3000
+      var stepTimeout = label === 'C2 big.txt直读' ? 5000 : 3000
       this.setResult(label, 'RUNNING')
       var finish = (value) => {
         if (settled || token !== this.generation) return
@@ -225,121 +181,98 @@ export default {
       }
       var guard = (run) => { try { run() } catch (error) { finish('FAIL ' + String(error)) } }
       this.timer = setTimeout(() => finish('FAIL timeout ' + stepTimeout / 1000 + 's'), stepTimeout)
-      if (label === 'B1 readText .txt') {
-        guard(() => file.readText({
-          uri: '/common/test.txt',
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try {
-              var text = data && data.text
-              finish(text ? 'PASS len=' + text.length + ' hash=' + hashBytes(text, 0, text.length, 1) : 'FAIL empty text')
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      } else if (label === 'B2 readAB .txt') {
+      if (label === 'C1 bin.txt直读') {
         guard(() => file.readArrayBuffer({
-          uri: '/common/test.txt',
+          uri: '/common/bin.txt',
           success: (data) => {
             if (settled || token !== this.generation) return
             try {
               var arr = data && data.buffer
-              finish(arr ? 'PASS bytes=' + arr.length + ' hash=' + hashBytes(arr, 0, arr.length, 1) : 'FAIL empty buffer')
+              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
+              var ok = !!arr && arr.length === 65536 && hash === PROBE_BIN_HASH
+              finish(ok ? 'PASS len=65536 hash=' + PROBE_BIN_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
             } catch (error) { finish('FAIL ' + String(error)) }
           },
           fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
         }))
-      } else if (label === 'B3 access .bin') {
+      } else if (label === 'C2 big.txt直读') {
+        guard(() => file.readArrayBuffer({
+          uri: '/common/big.txt',
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try {
+              var arr = data && data.buffer
+              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
+              var ok = !!arr && arr.length === 262144 && hash === BIG_TXT_HASH
+              finish(ok ? 'PASS len=262144 hash=' + BIG_TXT_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else if (label === 'C3 包内部分读') {
+        guard(() => file.readArrayBuffer({
+          uri: '/common/bin.txt',
+          position: 1024,
+          length: 2048,
+          success: (data) => {
+            if (settled || token !== this.generation) return
+            try {
+              var arr = data && data.buffer
+              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
+              var ok = !!arr && arr.length === 2048 && hash === SLICE_HASH
+              finish(ok ? 'PASS hash=' + SLICE_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
+            } catch (error) { finish('FAIL ' + String(error)) }
+          },
+          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+        }))
+      } else if (label === 'C4 copy .txt源') {
+        guard(() => this.runCopyProbe(token, finish, '/common/bin.txt', 1, 'c1', 'C4', PROBE_BIN_HASH))
+      } else if (label === 'C5 copy .bin源') {
+        guard(() => this.runCopyProbe(token, finish, '/common/probe.bin', 2, 'c2', 'C5', PROBE_BIN_HASH))
+      } else {
         guard(() => file.access({
-          uri: '/common/probe.bin',
+          uri: '/common/bin.txt',
           success: (data) => {
             if (settled || token !== this.generation) return
             finish('PASS exists=' + String(data && data.exists))
           },
           fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
         }))
-      } else if (label === 'B4 copy→internal') {
-        guard(() => {
-          this.fileSeq++
-          copyDst = 'internal://files/jspeak-probe-030-' + Date.now() + '-' + this.fileSeq + '-c.bin'
-          copyOk = false
-          copyJob = copyFile(file, '/common/probe.bin', copyDst, {
-            ready: (path) => {
-              if (settled || token !== this.generation) return
-              copyOk = true
-              finish('PASS ' + path)
-            },
-            error: (stage, message) => finish('FAIL ' + stage + ' ' + message),
-            cleanup: (message) => { if (this.scratch === copyJob) this.setResult('临时文件清理', message) }
-          })
-          this.scratch = copyJob
-          copyJob.start()
-        })
-      } else if (label === 'B5 copy读回') {
-        guard(() => {
-          if (!copyOk) { finish('SKIPPED'); return }
-          file.readArrayBuffer({
-            uri: copyDst,
-            success: (data) => {
-              if (settled || token !== this.generation) return
-              try {
-                var arr = data && data.buffer
-                var ok = !!arr && arr.length === 65536 && hashBytes(arr, 0, arr.length, 1) === PROBE_BIN_HASH
-                if (copyJob) copyJob.cancel()
-                finish(ok ? 'PASS hash=' + PROBE_BIN_HASH : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none'))
-              } catch (error) { finish('FAIL ' + String(error)) }
-            },
-            fail: (data, code) => { if (copyJob) copyJob.cancel(); finish('FAIL ' + String(code) + ' ' + String(data)) }
-          })
-        })
-      } else if (label === 'B6 大写 /Common') {
-        guard(() => file.readArrayBuffer({
-          uri: '/Common/probe.bin',
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try {
-              var arr = data && data.buffer
-              finish(arr ? 'PASS bytes=' + arr.length + ' hash=' + hashBytes(arr, 0, arr.length, 1) : 'FAIL empty buffer')
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      } else {
-        guard(() => this.runSliceProbe(token, finish))
       }
     }
     next()
   },
-  runSliceProbe(token, finish) {
-    this.fileSeq++
-    var uri = 'internal://files/jspeak-probe-030-' + Date.now() + '-' + this.fileSeq + '.bin'
-    this.setResult('B7 scratch 路径', uri)
-    var bytes = new Uint8Array(65536)
-    for (var i = 0; i < bytes.length; i++) bytes[i] = i & 255
-    this.setResult('B7 scratch write', 'WAITING')
-    this.setResult('B7 scratch read', 'WAITING')
-    this.setResult('临时文件清理', 'WAITING')
-    var job = scratchFile(file, uri, bytes, {
-      stage: (stage, value) => { if (token === this.generation) this.setResult('B7 scratch ' + stage, value) },
+  runCopyProbe(token, finish, srcUri, seq, suffix, label, expected) {
+    var dst = 'internal://files/jspeak-probe-031-' + Date.now() + '-' + seq + '-' + suffix + '.bin'
+    this.setResult(label + ' copy', 'WAITING')
+    this.setResult(label + ' 读回', 'WAITING')
+    this.setResult(label + ' 清理', 'WAITING')
+    var job = copyFile(file, srcUri, dst, {
       ready: (path) => {
         if (token !== this.generation) return
+        this.setResult(label + ' copy', 'PASS ' + path)
         file.readArrayBuffer({
           uri: path,
-          position: 1024,
-          length: 2048,
           success: (data) => {
             if (token !== this.generation) return
             try {
               var arr = data && data.buffer
-              var ok = !!arr && arr.length === 2048 && hashBytes(arr, 0, arr.length, 1) === SLICE_HASH
-              finish(ok ? 'PASS hash=' + SLICE_HASH : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none'))
+              var ok = !!arr && arr.length === 65536 && hashBytes(arr, 0, arr.length, 1) === expected
+              var value = ok ? 'PASS hash=' + expected : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none')
+              this.setResult(label + ' 读回', value)
+              if (job) job.cancel()
+              finish(value)
             } catch (error) { finish('FAIL ' + String(error)) }
           },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
+          fail: (data, code) => {
+            this.setResult(label + ' 读回', 'FAIL ' + String(code) + ' ' + String(data))
+            if (job) job.cancel()
+            finish('FAIL 读回 ' + String(code) + ' ' + String(data))
+          }
         })
       },
       error: (stage, message) => finish('FAIL ' + stage + ' ' + message),
-      cleanup: (message) => { if (this.scratch === job) this.setResult('临时文件清理', message) }
+      cleanup: (message) => this.setResult(label + ' 清理', message)
     })
     this.scratch = job
     job.start()

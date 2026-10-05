@@ -9,3 +9,4 @@ upstream/espeak-ng/
 session-*.md
 reports/local/
 apps/vela-probe/user_result/
+apps/vela-probe/src/build-stamp.js
