@@ -76,6 +76,10 @@ uri 为"目录或文件 uri"，无资源路径限制条款。文档未给出 acc
 3. **全 ✗** → 构建期 JS 数据模块（必须测包体、启动峰值内存、解析耗时三指标）或 interconnect 外部导入。
 - `system.zlib`（luoxe 记录：Smart Band 10 Pro / Watch S4 41mm 均 ✅，未公开 feature，RW5 未测）可用于压缩数据降低包体，若可用则与上述任一出口组合。
 
+## 判别结果（2026-10-04 真机，probe 0.3.0）
+
+B1/B2 PASS（.txt 512B，hash 975296040 跨端一致）；B6 与 0.2.0 基线复证 .bin 拒绝 202（大小写不敏感）→ 落入矩阵之外的新结论：**类型校验基于文件类型**，非资源路径整体缺失（修正本文 C+ 推断）。B3 access(.bin) FAIL `invalid parameter :path`；B4 copy(.bin→internal) FAIL `InternalError: invalid parameter`（含构建身份歧义：转录无法区分修复版被拒与修复前构建缺参，时间线指向修复版——0.3.1 引入构建戳并以 C5 复测消歧）；B7 internal 部分读 PASS（SLICE_HASH 一致）。决策树进入修正分支：首选"**文本扩展名直读**"出口（.txt 名二进制内容，无编码无复制），0.3.1 C1–C6 判定内容嗅探/尺度/包内部分读/copy(.txt 源)/copy(.bin 复测)/access(.txt)。详见 [0.3.0 设备结果](../device-results/2026-10-04-probe-0.3.0.md)。
+
 ## 参考材料
 
 - 用户提供的另一 AI 调研：`docs/about-vela-app-res-and-file.md`（其 A/B/C 分级与本次官方原文核对一致；其未覆盖 file.copy）。

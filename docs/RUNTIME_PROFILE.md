@@ -6,6 +6,8 @@
 
 第二轮真机结果（`docs/device-results/2026-10-02-probe-0.2.0.md`）：内部文件二进制 I/O 可用——64KiB `.bin` 与 64044 字节运行期生成 `.wav` 均写入后全字节读回一致；JS 生成双音 WAV 播放收到 ENDED 事件，用户确认听到低音—停顿—高音、顺序正确。内部完整 WAV 文件因此成为已部分验证的音频出口，但不构成 streaming 能力。包内资源 bin/dat/wav 三类 readArrayBuffer 均失败 `202 invalid file type`，而内部 bin/wav 成功：限制收敛在 file API 读取包内路径（文件确在 RPK 内、audio src 可播放包内 WAV），词典等静态数据装载方案仍待核验。完整可用内存和实时合成能力尚未验证；简单正弦生成 534ms/2s 不属于 eSpeak DSP 基准。
 
+第三轮真机结果（`docs/device-results/2026-10-04-probe-0.3.0.md`）：包内资源读取是**基于文件类型的门槛**——`.txt` 可被 readText/readArrayBuffer 读取（512B，hash 跨端一致），`.bin/.dat/.wav` 拒绝 202（大小写不敏感）；internal 分区 `position/length` 部分读成立（词典随机访问原语就绪，64KiB 全链 1807ms）。装载首选方案修正为"文本扩展名直读"（.txt 名二进制内容），待 0.3.1 判定内容嗅探、尺度与 copy/access 对 .txt 源的行为。
+
 ## 隔离
 
 核心仅接收数据与显式上下文，不 import Node、DOM、Vela。Node 用于工具/测试，系统音频/文件 API 仅在适配层。构建用语法转换不能补齐不存在的运行时 API。
