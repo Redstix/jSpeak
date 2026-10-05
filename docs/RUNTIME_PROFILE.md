@@ -8,6 +8,8 @@
 
 第三轮真机结果（`docs/device-results/2026-10-04-probe-0.3.0.md`）：包内资源读取是**基于文件类型的门槛**——`.txt` 可被 readText/readArrayBuffer 读取（512B，hash 跨端一致），`.bin/.dat/.wav` 拒绝 202（大小写不敏感）；internal 分区 `position/length` 部分读成立（词典随机访问原语就绪，64KiB 全链 1807ms）。装载首选方案修正为"文本扩展名直读"（.txt 名二进制内容），待 0.3.1 判定内容嗅探、尺度与 copy/access 对 .txt 源的行为。
 
+第四轮真机结果（probe 0.3.1，`docs/device-results/2026-10-05-probe-0.3.1.md`）：**装载路径定案——包内 .txt 直读**。.txt 名二进制内容可读（内容嗅探不存在）、256KiB 尺度成立（读+hash 2048ms）、包内路径 `position/length` 部分读成立——词典可分页随机访问，无需整读或复制。copy→internal 与 access 对包内路径一律关闭（构建身份已确认）。装载层按"包内 .txt 直读 + internal 仅存运行期产物"设计；>256KiB、启动耗时、峰值内存留待真实数据轮实测。
+
 ## 隔离
 
 核心仅接收数据与显式上下文，不 import Node、DOM、Vela。Node 用于工具/测试，系统音频/文件 API 仅在适配层。构建用语法转换不能补齐不存在的运行时 API。
