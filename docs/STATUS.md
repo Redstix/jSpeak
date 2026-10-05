@@ -1,4 +1,4 @@
-# Implementation status — 2026-10-02
+# Implementation status — 2026-10-05
 
 ## 已完成
 
@@ -35,6 +35,8 @@
 - 未执行完整上游 C 测试套件或模拟器；尚无合成性能验证。
 
 ## 下一步
+
+0. **完整路线与压缩后恢复点见 [正式开发计划](DEVELOPMENT_PLAN.md)**——执行顺序：解包 `design/espeak-ng-js-stage-designs.zip` 每阶段 DESIGN.md → D1 真实数据装载管线（probe 0.4.0）→ M00a trace 插桩（可并行）。
 
 1. 真实数据装载管线（装载层实现 + probe 0.4.0 合流）：上游 en-us 词典/音素数据以 .txt 扩展名打包，设备端 readArrayBuffer 全量/分页装载并逐字节 hash 校验；实测真实规模（可能 >256KiB）、启动耗时与峰值内存。
 2. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
