@@ -1,0 +1,184 @@
+diff --git a/src/libespeak-ng/CMakeLists.txt b/src/libespeak-ng/CMakeLists.txt
+index 299eda98..002961e9 100644
+--- a/src/libespeak-ng/CMakeLists.txt
++++ b/src/libespeak-ng/CMakeLists.txt
+@@ -16,6 +16,7 @@ add_library(espeak-ng
+ 
+   dictionary.c
+   encoding.c
++  jstrace.c
+   intonation.c
+   langopts.c
+   numbers.c
+diff --git a/src/libespeak-ng/encoding.c b/src/libespeak-ng/encoding.c
+index c3678b81..fbb14f91 100644
+--- a/src/libespeak-ng/encoding.c
++++ b/src/libespeak-ng/encoding.c
+@@ -19,6 +19,7 @@
+ 
+ #include <string.h>
+ #include <stdint.h>
++#include "jstrace.h"
+ #include <stdlib.h>
+ #include <wchar.h>
+ 
+@@ -768,7 +769,16 @@ text_decoder_eof(espeak_ng_TEXT_DECODER *decoder)
+ uint32_t
+ text_decoder_getc(espeak_ng_TEXT_DECODER *decoder)
+ {
+-	return decoder->get(decoder);
++	const uint8_t *before = decoder->current;
++	long remaining = before ? (long)(decoder->end - before) : 0;
++	uint32_t codepoint = decoder->get(decoder);
++	FILE *trace = js_trace_event("decode");
++	if (trace) {
++		fprintf(trace, ",\"codepoint\":%u,\"remainingBefore\":%ld,\"consumedBytes\":%ld",
++		        codepoint, remaining, before ? (long)(decoder->current - before) : 0);
++		js_trace_end(trace);
++	}
++	return codepoint;
+ }
+ 
+ uint32_t
+diff --git a/src/libespeak-ng/jstrace.c b/src/libespeak-ng/jstrace.c
+new file mode 100644
+index 00000000..945755d9
+--- /dev/null
++++ b/src/libespeak-ng/jstrace.c
+@@ -0,0 +1,36 @@
++/* jSpeak development-only observation helpers; no synthesis state mutations. */
++#include "jstrace.h"
++#include <stdlib.h>
++#include <string.h>
++static FILE *trace_file;
++static unsigned long trace_seq;
++static int initialized;
++FILE *js_trace_event(const char *kind)
++{
++    if (!initialized) {
++        const char *name = getenv("JSPEAK_TRACE_FILE");
++        initialized = 1;
++        if (name && *name) {
++            trace_file = fopen(name, "wb");
++            if (!trace_file) { perror("JSPEAK_TRACE_FILE"); exit(74); }
++        }
++    }
++    if (trace_file) fprintf(trace_file, "{\"seq\":%lu,\"kind\":\"%s\"", trace_seq++, kind);
++    return trace_file;
++}
++void js_trace_bytes(FILE *out, const char *bytes, size_t length)
++{
++    size_t i;
++    fputc('"', out);
++    for (i = 0; i < length; i++) fprintf(out, "%02x", (unsigned char)bytes[i]);
++    fputc('"', out);
++}
++void js_trace_hex(FILE *out, const char *bytes)
++{
++    js_trace_bytes(out, bytes, strlen(bytes));
++}
++void js_trace_end(FILE *out)
++{
++    fputs("}\n", out);
++    if (fflush(out) != 0 || ferror(out)) { perror("JSPEAK_TRACE_FILE write"); exit(74); }
++}
+diff --git a/src/libespeak-ng/jstrace.h b/src/libespeak-ng/jstrace.h
+new file mode 100644
+index 00000000..dc3c994d
+--- /dev/null
++++ b/src/libespeak-ng/jstrace.h
+@@ -0,0 +1,9 @@
++/* jSpeak development-only observation helpers. */
++#ifndef JSPEAK_TRACE_H
++#define JSPEAK_TRACE_H
++#include <stdio.h>
++FILE *js_trace_event(const char *kind);
++void js_trace_bytes(FILE *out, const char *bytes, size_t length);
++void js_trace_hex(FILE *out, const char *bytes);
++void js_trace_end(FILE *out);
++#endif
+diff --git a/src/libespeak-ng/translate.c b/src/libespeak-ng/translate.c
+index 1b479adf..3e2a875c 100644
+--- a/src/libespeak-ng/translate.c
++++ b/src/libespeak-ng/translate.c
+@@ -37,6 +37,7 @@
+ #include "dictionary.h"           // for TranslateRules, LookupDictList, Cha...
+ #include "phoneme.h"              // for phonSWITCH, PHONEME_TAB, phonPAUSE_...
+ #include "phonemelist.h"          // for MakePhonemeList
++#include "jstrace.h"
+ #include "readclause.h"           // for towlower2, Eof, ReadClause, is_str_...
+ #include "synthdata.h"            // for SelectPhonemeTable, LookupPhonemeTable
+ #include "synthesize.h"           // for PHONEME_LIST2, N_PHONEME_LIST, PHON...
+@@ -1089,6 +1090,21 @@ void TranslateClauseWithTerminator(Translator *tr, int *tone_out, char **voice_c
+ 		charix[ix] = 0;
+ 	MAKE_MEM_UNDEFINED(&source, sizeof(source));
+ 	terminator = ReadClause(tr, source, charix, &charix_top, N_TR_SOURCE, &tone, voice_change_name);
++	{
++		FILE *trace = js_trace_event("clause");
++		if (trace) {
++			int trace_ix;
++			fprintf(trace, ",\"startCharacter\":%d,\"startWord\":%d,\"terminator\":%u,\"tone\":%d,\"charixTop\":%d,\"sourceHex\":",
++			        clause_start_char, clause_start_word, (unsigned)terminator, tone, charix_top);
++			js_trace_hex(trace, source);
++			fputs(",\"charix\":[", trace);
++			for (trace_ix = 0; trace_ix <= charix_top; trace_ix++)
++				fprintf(trace, "%s%d", trace_ix ? "," : "", charix[trace_ix]);
++			fputc(']', trace);
++			js_trace_end(trace);
++		}
++	}
++
+ 
+ 	if (terminator_out != NULL) {
+ 		*terminator_out = terminator;
+@@ -1662,6 +1678,23 @@ void TranslateClauseWithTerminator(Translator *tr, int *tone_out, char **voice_c
+ 	}
+ 	words[0].flags |= FLAG_FIRST_WORD;
+ 
++	{
++		FILE *trace = js_trace_event("words");
++		if (trace) {
++			int trace_ix;
++			fputs(",\"bufferHex\":", trace);
++			js_trace_bytes(trace, sbuf, (size_t)(tr->clause_end - sbuf + 1));
++			fputs(",\"items\":[", trace);
++			for (trace_ix = 0; trace_ix < word_count; trace_ix++) {
++				WORD_TAB *w = &words[trace_ix];
++				fprintf(trace, "%s{\"flags\":%u,\"start\":%u,\"prePause\":%u,\"sourceix\":%u,\"length\":%u}",
++				        trace_ix ? "," : "", w->flags, w->start, w->pre_pause, w->sourceix, w->length);
++			}
++			fputc(']', trace);
++			js_trace_end(trace);
++		}
++	}
++
+ 	// Each TranslateWord2 may require up to 7 phonemes
+ 	// and after this loop we require 2 phonemes
+ 	for (ix = 0; ix < word_count && (n_ph_list2 < N_PHONEME_LIST-7-2); ix++) {
+@@ -1833,6 +1866,26 @@ void TranslateClauseWithTerminator(Translator *tr, int *tone_out, char **voice_c
+ 	if (Eof() && ((word_count == 0) || (option_endpause == 0)))
+ 		clause_pause = 10;
+ 
++	{
++		FILE *trace = js_trace_event("phonemes-before-list");
++		if (trace) {
++			int trace_ix;
++			int trace_table = tr->phoneme_tab_ix;
++			fprintf(trace, ",\"initialTable\":%d,\"postPauseMs\":%d,\"startSentence\":%s,\"items\":[",
++			        trace_table, clause_pause, new_sentence2 ? "true" : "false");
++			for (trace_ix = 0; trace_ix < n_ph_list2; trace_ix++) {
++				PHONEME_LIST2 *ph = &ph_list2[trace_ix];
++				/* tone_ph is not initialized in trailing pauses: only inspect it for SWITCH. */
++				int target = ph->phcode == phonSWITCH ? ph->tone_ph : -1;
++				fprintf(trace, "%s{\"table\":%d,\"code\":%u,\"stress\":%u,\"sourceix\":%u,\"synthflags\":%u,\"switchTo\":%d}",
++				        trace_ix ? "," : "", trace_table, ph->phcode, ph->stresslevel, ph->sourceix, ph->synthflags, target);
++				if (target >= 0) trace_table = target;
++			}
++			fputc(']', trace);
++			js_trace_end(trace);
++		}
++	}
++
+ 	MakePhonemeList(tr, clause_pause, new_sentence2);
+ 	phoneme_list[N_PHONEME_LIST].ph = NULL; // recognize end of phoneme_list array, in Generate()
+ 	phoneme_list[N_PHONEME_LIST].sourceix = 1;
