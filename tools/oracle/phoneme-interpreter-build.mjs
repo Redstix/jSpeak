@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+import {root,referenceBuild,fileHash} from './trace-build-info.mjs';
+import {interpreterRoot,interpreterSource,interpreterBinary,interpreterCleanBinary,interpreterInputs} from './phoneme-interpreter-build-info.mjs';
+const inputs=interpreterInputs(),compiler=readFileSync(path.join(referenceBuild,'CMakeCache.txt'),'utf8').match(/^CMAKE_C_COMPILER:FILEPATH=(.+)$/m)?.[1];assert(compiler);mkdirSync(interpreterRoot,{recursive:true});
+const base=['-std=c11','-O2','-Wall','-Wextra','-fwrapv','-DLIBESPEAK_NG_EXPORT=1',...['src/include','src/include/compat','src/ucd-tools/src/include','src/libespeak-ng'].map(name=>'-I'+path.join(root,'upstream/espeak-ng',name)),'-I'+path.join(referenceBuild,'src/libespeak-ng/include'),'-include',path.join(referenceBuild,'src/libespeak-ng/include/config.h')];
+const tail=[interpreterSource,...inputs.libraries.map(entry=>path.join(referenceBuild,entry.path)),'-lm'];
+const args=[...base,'-DJSPEAK_SYNTHDATA_SOURCE='+JSON.stringify(path.join(root,'upstream/espeak-ng/src/libespeak-ng/synthdata.c')),...tail,'-o',interpreterBinary];
+const cleanArgs=[...base,'-DJSPEAK_CLEAN=1',...tail,'-o',interpreterCleanBinary];
+execFileSync(compiler,args,{timeout:60000,stdio:'inherit'});execFileSync(compiler,cleanArgs,{timeout:60000,stdio:'inherit'});assert.deepEqual(interpreterInputs(),inputs);
+writeFileSync(path.join(interpreterRoot,'build-stamp.json'),JSON.stringify({schemaVersion:1,inputs,compiler,compilerVersion:execFileSync(compiler,['--version'],{encoding:'utf8'}).split('\n')[0],compileArguments:args,cleanCompileArguments:cleanArgs,binarySha256:fileHash(interpreterBinary),cleanBinarySha256:fileHash(interpreterCleanBinary)},null,2)+'\n');console.log('Built original InterpretPhoneme and pristine-library cross-check oracles.');
