@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "magic": "JSPEAK_RAW_DICTIONARY",
+  "format": "espeak-ng-dict-v1",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "language": "en",
+  "voice": "en-us",
+  "sourcePath": "en_dict",
+  "byteLength": 182152,
+  "sha256": "621c5825c37cff4510ab4e9a724314587995c78bcb86675d21964fe896ad2d4c",
+  "hash32": -1565457980,
+  "hashSpec": "xorshift32-byte-mix-seed0",
+  "hashBuckets": 1024,
+  "rulesOffset": 124920,
+  "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880",
+  "sourceFiles": [
+    {
+      "path": "src/libespeak-ng/tr_languages.c",
+      "sha256": "b166378ae39efdd4e998e00fa70410168627efb61268bcc1dc6d832bef207aa1"
+    },
+    {
+      "path": "src/libespeak-ng/translate.h",
+      "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+    },
+    {
+      "path": "src/libespeak-ng/dictionary.c",
+      "sha256": "f4e7080b60eb8f61b6d9b80caa8d34632af74178035fc3420afa17e6d1857603"
+    }
+  ],
+  "profileModuleSha256": "cb492c956d2a9f0614c2b89ec55740a8e844e8afa392ec349bd43cbd221a1254",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}
