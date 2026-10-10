@@ -1,13 +1,20 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak 探针 0.3.1</text>
+    <text class="title">jSpeak 探针 0.4.1</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
-        <text class="note">手动测试 / 非 TTS。请截图结果。</text>
+        <text class="note">手动 D1/A1 / 非 JS TTS。请截图版本和结果。</text>
         <input class="button" type="button" value="1 能力检查" onclick="checkCaps" />
         <input class="button" type="button" value="2 设备信息" onclick="checkDevice" />
         <input class="button" type="button" value="3 分片计算 (可重复3次)" onclick="checkCompute" />
-        <input class="button" type="button" value="4 装载判别" onclick="checkLoad" />
+        <input class="button" type="button" value="4 D1 两大文件全读" onclick="checkLoad" />
+        <input class="button" type="button" value="5 D1 分页 / 边界 / EOF" onclick="checkScan" />
+        <input class="button" type="button" value="6 D1 候选集全读驻留" onclick="checkResident" />
+        <input class="button" type="button" value="7 D1 分块组装驻留" onclick="checkAssemble" />
+        <input class="button" type="button" value="8 A1 包内 22050Hz 语音" onclick="playPackaged" />
+        <input class="button" type="button" value="9 A1 append / 头回填" onclick="checkAppend" />
+        <input class="button" type="button" value="10 A1 position / 头回填" onclick="checkPosition" />
+        <input class="button" type="button" value="11 A1 有界短句整写" onclick="checkBuffered" />
         <input class="button" type="button" value="停止 / 取消" onclick="stopAll" />
         <text class="note">结果在下方；BUSY 表示上次文件I/O未返回。</text>
         <div class="result" for="item in results">
@@ -22,15 +29,18 @@
 import audio from '@system.audio'
 import file from '@system.file'
 import device from '@system.device'
-import { capabilities, computeSlice, timingSummary, hashBytes, PROBE_BIN_HASH, BIG_TXT_HASH, SLICE_HASH } from '../../probe'
-import { copyFile } from '../../scratch-file'
+import { capabilities, computeSlice, timingSummary } from '../../probe'
+import { createDataProbe } from '../../data-loader'
+import { createWavProbe } from '../../wav-file'
+import { DATA_ASSETS } from '../../data-assets'
 import { BUILD_STAMP } from '../../build-stamp'
 
 export default {
   private: {
     results: [
-      { label: 'UI / 版本', value: 'READY 0.3.1 ' + BUILD_STAMP + ' / API1200 target' },
-      { label: 'PCM streaming', value: 'UNVERIFIED 本版无音频播放' }
+      { label: 'UI / 版本', value: 'READY 0.4.1 ' + BUILD_STAMP + ' / API1200 target' },
+      { label: '范围', value: '真实数据候选集 / Oracle WAV；非 JS 合成 / 非实时性能' },
+      { label: '数据闭包', value: DATA_ASSETS.closureComplete ? '见 manifest' : 'UNVERIFIED 候选依赖，尚未证明完整' }
     ]
   },
   onInit() {
@@ -38,9 +48,10 @@ export default {
     this.timer = null
     this.watchdog = null
     this.activeLabel = null
-    this.scratch = null
+    this.job = null
     this.fileSeq = 0
     this.computeRun = 0
+    this.dataRun = 0
     this.destroyed = false
   },
   onHide() { this.stopAll() },
@@ -66,14 +77,14 @@ export default {
     this.timer = null
     this.watchdog = null
     this.stopAudio()
-    if (this.scratch) this.scratch.cancel()
+    if (this.job) this.job.cancel()
     if (this.activeLabel) this.setResult(this.activeLabel, 'CANCELLED')
     this.activeLabel = null
     this.setResult('会话', 'STOPPED；迟到回调已忽略')
   },
   begin(label, watchdogMs) {
     this.stopAll()
-    if (this.scratch && this.scratch.isPending()) {
+    if (this.job && this.job.isPending()) {
       this.setResult(label, 'BUSY 上次文件I/O尚未返回，请稍后再试')
       return null
     }
@@ -97,7 +108,7 @@ export default {
     this.activeLabel = null
     this.generation++
     this.stopAudio()
-    if (this.scratch) this.scratch.cancel()
+    if (this.job) this.job.cancel()
     this.setResult(label, value)
     this.setResult('会话', 'DONE')
   },
@@ -150,132 +161,58 @@ export default {
     }
     this.timer = setTimeout(step, 10)
   },
-  checkLoad() {
-    var token = this.begin('装载判别', 35000)
+  checkLoad() { this.runData('whole') },
+  checkScan() { this.runData('scan') },
+  checkResident() { this.runData('resident') },
+  checkAssemble() { this.runData('assemble') },
+  runData(mode) {
+    var label = 'D1 ' + mode
+    var token = this.begin(label, 180000)
     if (token === null) return
-    var labels = [
-      'C1 bin.txt直读',
-      'C2 big.txt直读',
-      'C3 包内部分读',
-      'C4 copy .txt源',
-      'C5 copy .bin源',
-      'C6 access .txt'
-    ]
-    for (var n = 0; n < labels.length; n++) this.setResult(labels[n], 'WAITING')
-    var index = 0
-    var next = () => {
-      if (token !== this.generation) return
-      if (index === labels.length) { this.done('装载判别', 'DONE 请看各项结果', token); return }
-      var label = labels[index++]
-      var started = Date.now()
-      var settled = false
-      var stepTimeout = label === 'C2 big.txt直读' ? 5000 : 3000
-      this.setResult(label, 'RUNNING')
-      var finish = (value) => {
-        if (settled || token !== this.generation) return
-        settled = true
-        clearTimeout(this.timer)
-        this.timer = null
-        this.setResult(label, value + ' / ' + (Date.now() - started) + 'ms')
-        next()
-      }
-      var guard = (run) => { try { run() } catch (error) { finish('FAIL ' + String(error)) } }
-      this.timer = setTimeout(() => finish('FAIL timeout ' + stepTimeout / 1000 + 's'), stepTimeout)
-      if (label === 'C1 bin.txt直读') {
-        guard(() => file.readArrayBuffer({
-          uri: '/common/bin.txt',
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try {
-              var arr = data && data.buffer
-              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
-              var ok = !!arr && arr.length === 65536 && hash === PROBE_BIN_HASH
-              finish(ok ? 'PASS len=65536 hash=' + PROBE_BIN_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      } else if (label === 'C2 big.txt直读') {
-        guard(() => file.readArrayBuffer({
-          uri: '/common/big.txt',
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try {
-              var arr = data && data.buffer
-              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
-              var ok = !!arr && arr.length === 262144 && hash === BIG_TXT_HASH
-              finish(ok ? 'PASS len=262144 hash=' + BIG_TXT_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      } else if (label === 'C3 包内部分读') {
-        guard(() => file.readArrayBuffer({
-          uri: '/common/bin.txt',
-          position: 1024,
-          length: 2048,
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            try {
-              var arr = data && data.buffer
-              var hash = arr ? hashBytes(arr, 0, arr.length, 1) : 'none'
-              var ok = !!arr && arr.length === 2048 && hash === SLICE_HASH
-              finish(ok ? 'PASS hash=' + SLICE_HASH : 'FAIL verify len=' + (arr ? arr.length : 'none') + ' hash=' + hash)
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      } else if (label === 'C4 copy .txt源') {
-        guard(() => this.runCopyProbe(token, finish, '/common/bin.txt', 1, 'c1', 'C4', PROBE_BIN_HASH))
-      } else if (label === 'C5 copy .bin源') {
-        guard(() => this.runCopyProbe(token, finish, '/common/probe.bin', 2, 'c2', 'C5', PROBE_BIN_HASH))
-      } else {
-        guard(() => file.access({
-          uri: '/common/bin.txt',
-          success: (data) => {
-            if (settled || token !== this.generation) return
-            finish('PASS exists=' + String(data && data.exists))
-          },
-          fail: (data, code) => finish('FAIL ' + String(code) + ' ' + String(data))
-        }))
-      }
-    }
-    next()
+    this.dataRun++
+    this.setResult('D1 本轮', '#' + this.dataRun + ' ' + mode + '；冷/热运行请手记；heap 不可测')
+    this.job = createDataProbe(file, DATA_ASSETS, mode, {
+      row: (name, value) => { if (token === this.generation) this.setResult(name, value) },
+      error: (message) => this.done(label, 'FAIL ' + message, token),
+      done: (message) => this.done(label, message, token)
+    })
+    this.job.start()
   },
-  runCopyProbe(token, finish, srcUri, seq, suffix, label, expected) {
-    var dst = 'internal://files/jspeak-probe-031-' + Date.now() + '-' + seq + '-' + suffix + '.bin'
-    this.setResult(label + ' copy', 'WAITING')
-    this.setResult(label + ' 读回', 'WAITING')
-    this.setResult(label + ' 清理', 'WAITING')
-    var job = copyFile(file, srcUri, dst, {
+  playPackaged() { this.runAudio('packaged') },
+  checkAppend() { this.runAudio('append') },
+  checkPosition() { this.runAudio('position') },
+  checkBuffered() { this.runAudio('buffered') },
+  runAudio(mode) {
+    var label = 'A1 ' + mode
+    var token = this.begin(label, 60000)
+    if (token === null) return
+    this.fileSeq++
+    var uri = 'internal://files/jspeak-probe-041-' + Date.now() + '-' + this.fileSeq + '.wav'
+    this.setResult(label + ' 听感', 'UNVERIFIED 请记录是否听到清晰英文')
+    this.setResult(label + ' 播放', 'WAITING 先校验字节')
+    this.setResult(label + ' 清理', mode === 'packaged' ? 'N/A 包内资源' : 'WAITING ' + uri)
+    this.job = createWavProbe(file, DATA_ASSETS.audio, mode, uri, {
+      row: (name, value) => { if (token === this.generation) this.setResult(label + ' ' + name, value) },
+      cleanup: (message) => this.setResult(label + ' 清理', message),
+      error: (message) => this.done(label, 'FAIL ' + message, token),
       ready: (path) => {
         if (token !== this.generation) return
-        this.setResult(label + ' copy', 'PASS ' + path)
-        file.readArrayBuffer({
-          uri: path,
-          success: (data) => {
-            if (token !== this.generation) return
-            try {
-              var arr = data && data.buffer
-              var ok = !!arr && arr.length === 65536 && hashBytes(arr, 0, arr.length, 1) === expected
-              var value = ok ? 'PASS hash=' + expected : 'FAIL hash 不符 len=' + (arr ? arr.length : 'none')
-              this.setResult(label + ' 读回', value)
-              if (job) job.cancel()
-              finish(value)
-            } catch (error) { finish('FAIL ' + String(error)) }
-          },
-          fail: (data, code) => {
-            this.setResult(label + ' 读回', 'FAIL ' + String(code) + ' ' + String(data))
-            if (job) job.cancel()
-            finish('FAIL 读回 ' + String(code) + ' ' + String(data))
+        try {
+          audio.onplay = () => {
+            if (token === this.generation) this.setResult(label + ' 播放', 'EVENT onplay 22050Hz；听感请手记')
           }
-        })
-      },
-      error: (stage, message) => finish('FAIL ' + stage + ' ' + message),
-      cleanup: (message) => this.setResult(label + ' 清理', message)
+          audio.onended = () => {
+            if (token !== this.generation) return
+            this.setResult(label + ' 播放', 'EVENT onended；不自动判定听感')
+            this.done(label, 'DONE bytes verified + ended event；听感待确认', token)
+          }
+          audio.onerror = (data) => this.done(label, 'FAIL audio ' + String(data), token)
+          audio.src = path
+          audio.play()
+        } catch (error) { this.done(label, 'FAIL audio ' + String(error), token) }
+      }
     })
-    this.scratch = job
-    job.start()
+    this.job.start()
   }
 }
 </script>

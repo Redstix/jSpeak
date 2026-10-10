@@ -2,19 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { loadProbe, descriptor, wavFixture, manifestFixture } from './helpers/probe.mjs';
+const dataProbe = await loadProbe('data-loader');
+const wavProbe = await loadProbe('wav-file');
+const tiny = Uint8Array.from({ length: 8193 }, (_, i) => i & 255);
+const enAsset = descriptor('en_dict', tiny);
+const audioFixture = wavFixture();
+const DATA_ASSETS = { ...manifestFixture([enAsset]), closureComplete: false, audio: audioFixture.asset };
 
 async function load(name) {
   const source = readFileSync(new URL('../apps/vela-probe/src/' + name + '.js', import.meta.url), 'utf8');
   return import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 }
 const probe = await load('probe');
-const tone = await load('tone');
-const scratch = await load('scratch-file');
 let stamp;
 try { stamp = await load('build-stamp'); } catch { stamp = { BUILD_STAMP: 'STAMP-MISSING' }; }
-const BIN_TXT = new Uint8Array(readFileSync(new URL('../apps/vela-probe/src/common/bin.txt', import.meta.url)));
-const BIG_TXT = new Uint8Array(readFileSync(new URL('../apps/vela-probe/src/common/big.txt', import.meta.url)));
-const PROBE_BIN = new Uint8Array(readFileSync(new URL('../apps/vela-probe/src/common/probe.bin', import.meta.url)));
 
 function mount(options) {
   const ux = readFileSync(new URL('../apps/vela-probe/src/pages/index/index.ux', import.meta.url), 'utf8');
@@ -35,7 +37,7 @@ function mount(options) {
     file[method] = request => { (requests[method] ||= []).push(request); };
   }
   const context = {
-    ...probe, ...tone, ...scratch, ...stamp,
+    ...probe, ...stamp, DATA_ASSETS,
     audio,
     file,
     device: { getInfo(request) { deviceRequest = request; } },
@@ -45,6 +47,9 @@ function mount(options) {
     Date: { now: () => now },
     Math
   };
+  const environment = { now: () => now, later: context.setTimeout, clear: context.clearTimeout };
+  context.createDataProbe = (file, assets, mode, hooks) => dataProbe.createDataProbe(file, assets, mode, hooks, environment);
+  context.createWavProbe = (file, asset, mode, uri, hooks) => wavProbe.createWavProbe(file, asset, mode, uri, hooks, environment);
   vm.runInNewContext(script, context);
   const page = context.component;
   page.results = Array.from(page.private.results);
@@ -90,189 +95,55 @@ test('first terminal callback wins and releases watchdog', () => {
 
 test('version header embeds the build stamp', () => {
   const app = mount();
-  assert.match(app.result('UI / 版本'), /^READY 0\.3\.1 B\d{6}T\d{6} \/ API1200 target$/);
+  assert.match(app.result('UI / 版本'), /^READY 0\.4\.1 B\d{6}T\d{6} \/ API1200 target$/);
 });
 
-test('load matrix happy path records all six rows, verifies both copies and cleans up', () => {
+test('D1 cancelled native read blocks replacement until callback and ignores late results', () => {
   const app = mount();
   app.page.checkLoad();
-  app.requests.readArrayBuffer[0].success({ buffer: BIN_TXT.slice() });
-  assert.match(app.result('C1 bin.txt直读'), new RegExp('PASS len=65536 hash=' + probe.PROBE_BIN_HASH));
-  app.requests.readArrayBuffer[1].success({ buffer: BIG_TXT.slice() });
-  assert.match(app.result('C2 big.txt直读'), new RegExp('PASS len=262144 hash=' + probe.BIG_TXT_HASH));
-  const partial = app.requests.readArrayBuffer[2];
-  assert.equal(partial.position, 1024);
-  assert.equal(partial.length, 2048);
-  partial.success({ buffer: BIN_TXT.slice(1024, 3072) });
-  assert.match(app.result('C3 包内部分读'), new RegExp('PASS hash=' + probe.SLICE_HASH));
-  app.requests.get[0].fail('missing', 301);
-  assert.equal(app.requests.copy.length, 1);
-  assert.equal(app.requests.copy[0].srcUri, '/common/bin.txt');
-  assert.match(app.requests.copy[0].dstUri, /^internal:\/\/files\/jspeak-probe-031-.*-1-c1\.bin$/);
-  const dstC4 = app.requests.copy[0].dstUri;
-  app.requests.copy[0].success();
-  assert.match(app.result('C4 copy'), new RegExp('PASS ' + dstC4));
-  app.requests.readArrayBuffer[3].success({ buffer: BIN_TXT.slice() });
-  assert.match(app.result('C4 读回'), new RegExp('PASS hash=' + probe.PROBE_BIN_HASH));
-  assert.match(app.result('C4 copy .txt源'), new RegExp('PASS hash=' + probe.PROBE_BIN_HASH));
-  assert.equal(app.requests.delete[0].uri, dstC4);
-  app.requests.delete[0].success();
-  assert.match(app.result('C4 清理'), /^PASS/);
-  app.requests.get[1].fail('missing', 301);
-  assert.equal(app.requests.copy.length, 2);
-  assert.equal(app.requests.copy[1].srcUri, '/common/probe.bin');
-  assert.match(app.requests.copy[1].dstUri, /^internal:\/\/files\/jspeak-probe-031-.*-2-c2\.bin$/);
-  const dstC5 = app.requests.copy[1].dstUri;
-  app.requests.copy[1].success();
-  assert.match(app.result('C5 copy'), new RegExp('PASS ' + dstC5));
-  app.requests.readArrayBuffer[4].success({ buffer: PROBE_BIN.slice() });
-  assert.match(app.result('C5 读回'), new RegExp('PASS hash=' + probe.PROBE_BIN_HASH));
-  assert.equal(app.requests.delete[1].uri, dstC5);
-  app.requests.delete[1].success();
-  assert.match(app.result('C5 清理'), /^PASS/);
-  app.requests.access[0].success({ exists: true });
-  assert.match(app.result('C6 access .txt'), /PASS exists=true/);
-  assert.match(app.result('装载判别'), /^DONE/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('load matrix records failures per row and C4 failure does not skip C5', () => {
-  const app = mount();
+  const previous = app.requests.readArrayBuffer[0];
+  app.page.checkScan();
+  assert.match(app.result('D1 scan'), /^BUSY/);
+  assert.equal(app.requests.readArrayBuffer.length, 1);
+  previous.success({ buffer: tiny });
+  assert.match(app.result('D1 whole'), /CANCELLED/);
   app.page.checkLoad();
-  app.requests.readArrayBuffer[0].fail('invalid file type', 202);
-  assert.match(app.result('C1 bin.txt直读'), /FAIL 202 invalid file type/);
-  app.requests.readArrayBuffer[1].fail('invalid file type', 202);
-  assert.match(app.result('C2 big.txt直读'), /FAIL 202/);
-  app.requests.readArrayBuffer[2].fail('invalid file type', 202);
-  assert.match(app.result('C3 包内部分读'), /FAIL 202/);
-  app.requests.get[0].fail('missing', 301);
-  app.requests.copy[0].fail('InternalError: invalid parameter', 'JS');
-  assert.match(app.result('C4 copy .txt源'), /FAIL copy JS InternalError: invalid parameter/);
-  assert.equal(app.requests.delete[0].uri, app.requests.copy[0].dstUri);
-  app.requests.delete[0].fail('missing', 301);
-  assert.match(app.result('C4 清理'), /leftover: internal:/);
-  assert.match(app.result('C5 copy .bin源'), /RUNNING/);
-  app.requests.get[1].fail('missing', 301);
-  app.requests.copy[1].fail('invalid file type', 202);
-  assert.match(app.result('C5 copy .bin源'), /FAIL copy 202 invalid file type/);
-  app.requests.delete[1].success();
-  assert.match(app.result('C5 清理'), /^PASS/);
-  app.requests.access[0].fail('InternalError: invalid parameter :path', '');
-  assert.match(app.result('C6 access .txt'), /InternalError: invalid parameter :path/);
-  assert.match(app.result('装载判别'), /^DONE/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('missing copy/access members are caught per row and C4 failure does not skip C5', () => {
-  const app = mount({ omit: ['copy', 'access'] });
-  app.page.checkLoad();
-  app.requests.readArrayBuffer[0].success({ buffer: BIN_TXT.slice() });
-  app.requests.readArrayBuffer[1].success({ buffer: BIG_TXT.slice() });
-  app.requests.readArrayBuffer[2].success({ buffer: BIN_TXT.slice(1024, 3072) });
-  app.requests.get[0].fail('missing', 301);
-  assert.match(app.result('C4 copy .txt源'), /UNSUPPORTED copy/);
-  assert.equal(app.requests.delete[0].uri, app.requests.get[0].uri);
-  app.requests.delete[0].fail('missing', 301);
-  assert.match(app.result('C4 清理'), /leftover: internal:/);
-  app.requests.get[1].fail('missing', 301);
-  assert.match(app.result('C5 copy .bin源'), /UNSUPPORTED copy/);
-  app.requests.delete[1].success();
-  assert.match(app.result('C6 access .txt'), /FAIL TypeError.*access/);
-  assert.match(app.result('装载判别'), /^DONE/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('C4 read-back hash mismatch records failure and still removes the copy', () => {
-  const app = mount();
-  app.page.checkLoad();
-  app.requests.readArrayBuffer[0].success({ buffer: BIN_TXT.slice() });
-  app.requests.readArrayBuffer[1].success({ buffer: BIG_TXT.slice() });
-  app.requests.readArrayBuffer[2].success({ buffer: BIN_TXT.slice(1024, 3072) });
-  app.requests.get[0].fail('missing', 301);
-  app.requests.copy[0].success();
-  const wrong = BIN_TXT.slice(); wrong[0] ^= 1;
-  app.requests.readArrayBuffer[3].success({ buffer: wrong });
-  assert.match(app.result('C4 读回'), /FAIL hash 不符 len=65536/);
-  assert.match(app.result('C4 copy .txt源'), /FAIL hash 不符/);
-  assert.equal(app.requests.delete[0].uri, app.requests.copy[0].dstUri);
-  app.requests.delete[0].success();
-  assert.match(app.result('C4 清理'), /^PASS/);
-  app.requests.get[1].fail('missing', 301);
-  app.requests.copy[1].success();
-  app.requests.readArrayBuffer[4].success({ buffer: PROBE_BIN.slice() });
-  assert.match(app.result('C5 读回'), new RegExp('PASS hash=' + probe.PROBE_BIN_HASH));
-  app.requests.delete[1].success();
-  app.requests.access[0].success({ exists: false });
-  assert.match(app.result('C6 access .txt'), /PASS exists=false/);
-  assert.match(app.result('装载判别'), /^DONE/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('per-row timeout advances the load matrix and late callbacks are ignored', () => {
-  const app = mount();
-  app.page.checkLoad();
-  const late = app.requests.readArrayBuffer[0];
-  app.fire(3000);
-  assert.match(app.result('C1 bin.txt直读'), /FAIL timeout 3s/);
-  late.fail('late', 202);
-  assert.match(app.result('C1 bin.txt直读'), /FAIL timeout 3s/);
   assert.equal(app.requests.readArrayBuffer.length, 2);
-  app.fire(5000);
-  assert.match(app.result('C2 big.txt直读'), /FAIL timeout 5s/);
+  previous.fail('late', 300);
+  assert.equal(app.result('D1 whole'), 'RUNNING');
   app.page.stopAll();
+});
+
+test('D1 timeout reports failure but native operation still blocks new runs', () => {
+  const app = mount(); app.page.checkLoad();
+  app.fire(15000);
+  assert.match(app.result('D1 whole'), /FAIL.*timeout.*native I\/O still pending/);
+  app.page.checkLoad(); assert.match(app.result('D1 whole'), /^BUSY/);
+  app.requests.readArrayBuffer[0].fail('late', 300);
+  app.page.checkLoad(); assert.equal(app.requests.readArrayBuffer.length, 2);
+  app.page.stopAll();
+});
+
+test('D1 finishing clears timers and reports scoped memory measurement', () => {
+  const app = mount(); app.page.checkResident();
+  app.requests.readArrayBuffer[0].success({ buffer: tiny });
+  for (let n = 0; n < 4; n++) app.fire(10);
+  assert.match(app.result('D1 resident'), /PASS; verifiedResident=8193B; buffers released/);
+  assert.match(app.result('D1 resident 计量'), /heap不可测/);
   assert.equal(app.timers.size, 0);
 });
 
-test('cancel during copy waits for the in-flight callback then deletes the copy product', () => {
-  const app = mount();
-  app.page.checkLoad();
-  app.requests.readArrayBuffer[0].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[1].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[2].fail('invalid file type', 202);
-  app.requests.get[0].fail('missing', 301);
-  app.page.stopAll();
-  assert.match(app.result('装载判别'), /CANCELLED/);
-  assert.equal(app.requests.delete, undefined);
-  app.requests.copy[0].success();
-  assert.equal(app.requests.delete.length, 1);
-  assert.equal(app.requests.delete[0].uri, app.requests.copy[0].dstUri);
-  app.requests.delete[0].success();
-  assert.match(app.result('C4 清理'), /^PASS/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('cancel during read-back deletes the copy product and ignores the late verify', () => {
-  const app = mount();
-  app.page.checkLoad();
-  app.requests.readArrayBuffer[0].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[1].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[2].fail('invalid file type', 202);
-  app.requests.get[0].fail('missing', 301);
-  app.requests.copy[0].success();
-  const read = app.requests.readArrayBuffer[3];
-  app.page.stopAll();
-  assert.equal(app.requests.delete.length, 1);
-  assert.equal(app.requests.delete[0].uri, app.requests.copy[0].dstUri);
-  read.success({ buffer: BIN_TXT.slice() });
-  assert.match(app.result('C4 读回'), /WAITING/);
-  app.requests.delete[0].success();
-  assert.match(app.result('C4 清理'), /^PASS/);
-  assert.equal(app.timers.size, 0);
-});
-
-test('in-flight copy I/O blocks a new run with BUSY', () => {
-  const app = mount();
-  app.page.checkLoad();
-  app.requests.readArrayBuffer[0].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[1].fail('invalid file type', 202);
-  app.requests.readArrayBuffer[2].fail('invalid file type', 202);
-  app.requests.get[0].fail('missing', 301);
-  app.page.checkLoad();
-  assert.match(app.result('装载判别'), /^BUSY/);
-  app.requests.copy[0].success();
-  assert.equal(app.requests.delete.length, 1);
-  app.requests.delete[0].success();
-  assert.match(app.result('C4 清理'), /^PASS/);
+test('A1 requires explicit action, verifies source, and ignores stale playback events after hide', () => {
+  const app = mount(); assert.equal(app.plays(), 0);
+  app.page.playPackaged(); assert.equal(app.plays(), 0);
+  app.requests.readArrayBuffer[0].success({ buffer: audioFixture.bytes });
+  for (let n = 0; n < 10; n++) app.fire(10);
+  assert.equal(app.plays(), 1); assert.equal(app.audio.src, DATA_ASSETS.audio.uri);
+  const late = app.audio.onended;
+  app.audio.onplay(); assert.match(app.result('A1 packaged 播放'), /EVENT onplay/);
+  app.page.onHide(); late();
+  assert.equal(app.result('A1 packaged'), 'CANCELLED');
+  assert.equal(app.timers.size, 0); assert.equal(app.audio.onended, null);
 });
 
 test('hide/destroy cancel compute and clear playback callbacks', () => {
