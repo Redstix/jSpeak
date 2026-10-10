@@ -1,0 +1,119 @@
+diff --git a/src/libespeak-ng/CMakeLists.txt b/src/libespeak-ng/CMakeLists.txt
+index 299eda98..84503fc0 100644
+--- a/src/libespeak-ng/CMakeLists.txt
++++ b/src/libespeak-ng/CMakeLists.txt
+@@ -16,6 +16,7 @@ add_library(espeak-ng
+ 
+   dictionary.c
+   encoding.c
++  jstokenizer.c
+   intonation.c
+   langopts.c
+   numbers.c
+diff --git a/src/libespeak-ng/jstokenizer.c b/src/libespeak-ng/jstokenizer.c
+new file mode 100644
+index 00000000..6f7e0823
+--- /dev/null
++++ b/src/libespeak-ng/jstokenizer.c
+@@ -0,0 +1,3 @@
++#include "jstokenizer.h"
++JSPEAK_READ_HOOK jspeak_read_hook = NULL;
++JSPEAK_WORDS_HOOK jspeak_words_hook = NULL;
+diff --git a/src/libespeak-ng/jstokenizer.h b/src/libespeak-ng/jstokenizer.h
+new file mode 100644
+index 00000000..c48f5e0c
+--- /dev/null
++++ b/src/libespeak-ng/jstokenizer.h
+@@ -0,0 +1,26 @@
++/* Development-only tokenizer boundary hooks and direct primitive wrappers. */
++#ifndef JSPEAK_TOKENIZER_H
++#define JSPEAK_TOKENIZER_H
++#include <stddef.h>
++#include "translate.h"
++typedef struct {
++    int embedded_ix, embedded_read, option_sayas2, count_sayas_digits;
++    int word_emphasis, option_sayas, option_emphasis, pending_count;
++} JSPEAK_EMBEDDED_STATE;
++typedef struct {
++    unsigned int source_index;
++    int source_index_word, word_flags, next_word_flags, finished;
++    int count_words, count_sentences, max_clause_pause, clause_pause;
++    int new_sentence, start_sentence, terminator;
++    JSPEAK_EMBEDDED_STATE embedded;
++} JSPEAK_TOKENIZER_STATE;
++typedef void (*JSPEAK_READ_HOOK)(Translator *, const char *, const short *, int, int, int);
++typedef int (*JSPEAK_WORDS_HOOK)(Translator *, const char *, const short *, int, const char *, size_t, const WORD_TAB *, int, const JSPEAK_TOKENIZER_STATE *);
++extern JSPEAK_READ_HOOK jspeak_read_hook;
++extern JSPEAK_WORDS_HOOK jspeak_words_hook;
++int jspeak_translate_char(Translator *, char *, int, unsigned int, unsigned int, int *, int *);
++int jspeak_substitute_char(Translator *, unsigned int, unsigned int, const char *, int *, int *);
++int jspeak_should_split_ideographs(Translator *, int, int);
++void jspeak_capture_embedded_state(JSPEAK_EMBEDDED_STATE *, int);
++int jspeak_embedded_capacity(void);
++#endif
+diff --git a/src/libespeak-ng/translate.c b/src/libespeak-ng/translate.c
+index 1b479adf..d9b9c87f 100644
+--- a/src/libespeak-ng/translate.c
++++ b/src/libespeak-ng/translate.c
+@@ -37,6 +37,7 @@
+ #include "dictionary.h"           // for TranslateRules, LookupDictList, Cha...
+ #include "phoneme.h"              // for phonSWITCH, PHONEME_TAB, phonPAUSE_...
+ #include "phonemelist.h"          // for MakePhonemeList
++#include "jstokenizer.h"
+ #include "readclause.h"           // for towlower2, Eof, ReadClause, is_str_...
+ #include "synthdata.h"            // for SelectPhonemeTable, LookupPhonemeTable
+ #include "synthesize.h"           // for PHONEME_LIST2, N_PHONEME_LIST, PHON...
+@@ -1089,6 +1090,7 @@ void TranslateClauseWithTerminator(Translator *tr, int *tone_out, char **voice_c
+ 		charix[ix] = 0;
+ 	MAKE_MEM_UNDEFINED(&source, sizeof(source));
+ 	terminator = ReadClause(tr, source, charix, &charix_top, N_TR_SOURCE, &tone, voice_change_name);
++	if (jspeak_read_hook) jspeak_read_hook(tr, source, charix, charix_top, terminator, tone);
+ 
+ 	if (terminator_out != NULL) {
+ 		*terminator_out = terminator;
+@@ -1662,6 +1664,18 @@ void TranslateClauseWithTerminator(Translator *tr, int *tone_out, char **voice_c
+ 	}
+ 	words[0].flags |= FLAG_FIRST_WORD;
+ 
++	if (jspeak_words_hook) {
++		JSPEAK_TOKENIZER_STATE state = {
++			source_index, source_index_word, word_flags, next_word_flags, finished,
++			count_words, count_sentences, max_clause_pause, clause_pause,
++			new_sentence, new_sentence2, terminator, {0}
++		};
++		jspeak_capture_embedded_state(&state.embedded, embedded_count);
++		if (jspeak_words_hook(tr, source, charix, charix_top, sbuf,
++		                     (size_t)(tr->clause_end - sbuf + 1), words, word_count, &state))
++			return;
++	}
++
+ 	// Each TranslateWord2 may require up to 7 phonemes
+ 	// and after this loop we require 2 phonemes
+ 	for (ix = 0; ix < word_count && (n_ph_list2 < N_PHONEME_LIST-7-2); ix++) {
+@@ -1988,3 +2002,26 @@ void InitText(int control)
+ 	if ((control & espeakKEEP_NAMEDATA) == 0)
+ 		InitNamedata();
+ }
++
++/* Direct wrappers keep original static algorithms and their sequence state. */
++int jspeak_translate_char(Translator *tr, char *ptr, int prev, unsigned int cp, unsigned int next, int *insert, int *flags)
++{
++    return TranslateChar(tr, ptr, prev, cp, next, insert, flags);
++}
++int jspeak_substitute_char(Translator *tr, unsigned int cp, unsigned int next, const char *ptr, int *insert, int *flags)
++{
++    return SubstituteChar(tr, cp, next, ptr, insert, flags);
++}
++int jspeak_should_split_ideographs(Translator *tr, int cp, int previous)
++{
++    return ShouldSplitIdeographs(tr, cp, previous);
++}
++void jspeak_capture_embedded_state(JSPEAK_EMBEDDED_STATE *out, int pending_count)
++{
++    *out = (JSPEAK_EMBEDDED_STATE){embedded_ix, embedded_read, option_sayas2,
++        count_sayas_digits, word_emphasis, option_sayas, option_emphasis, pending_count};
++}
++int jspeak_embedded_capacity(void)
++{
++    return N_EMBEDDED_LIST;
++}

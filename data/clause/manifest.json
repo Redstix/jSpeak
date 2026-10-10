@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "kind": "espeak-clause-property-top12",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "unicodeVersion": "11.0.0",
+  "codePointCount": 1114112,
+  "mask64Hex": "fff0000000000000",
+  "sourceShift": 52,
+  "layout": "sparse triples inclusive start/end/raw property top12; absent codepoints have zero properties",
+  "sourceFiles": [
+    {
+      "path": "src/ucd-tools/src/include/ucd/ucd.h",
+      "sha256": "4d0f07930384e2a57a4abeb433bd3fef35a5904b2c5ce6ad6ee30f72ddfde67f"
+    },
+    {
+      "path": "src/ucd-tools/src/categories.c",
+      "sha256": "edd26047254c98d65936f1f4237feb2389acb1cce3733a2b693e1a9b9f333880"
+    },
+    {
+      "path": "src/ucd-tools/src/proplist.c",
+      "sha256": "6a96e07b90ca58a9b807f6cf8ece6294f4864ba017e99c0574aeb235b0d41053"
+    },
+    {
+      "path": "src/libespeak-ng/readclause.c",
+      "sha256": "55031ff1e65bee4fdf228cdc75e481e7b43f9b0e93c1ab008f58b8d98d980bc1"
+    },
+    {
+      "path": "src/libespeak-ng/translate.h",
+      "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+    }
+  ],
+  "sourceFingerprint": "ce016c482215eae6de1e9893a43a160b5da7c4f0e240704100121f4aef6c55e1",
+  "exporterSha256": "306155f5ae3ff234bb50e6871f7ca38a9c354e15cefc145e4b7f52852e153e15",
+  "tableExportSha256": "ba3946ec4c2ae3b7d9cda7e6bec6f6cc297b1f2ad907f4d13a89f820f23016f3",
+  "properties": {
+    "INVERTED_TERMINAL_PUNCTUATION": 1,
+    "PUNCTUATION_IN_WORD": 2,
+    "OPTIONAL_SPACE_AFTER": 4,
+    "EXTENDED_DASH": 8,
+    "PARAGRAPH_SEPARATOR": 16,
+    "ELLIPSIS": 32,
+    "SEMI_COLON": 64,
+    "COLON": 128,
+    "COMMA": 256,
+    "EXCLAMATION_MARK": 512,
+    "QUESTION_MARK": 1024,
+    "FULL_STOP": 2048
+  },
+  "constants": {
+    "PAUSE": 4095,
+    "INTONATION_TYPE": 28672,
+    "OPTIONAL_SPACE_AFTER": 32768,
+    "TYPE": 983040,
+    "PUNCTUATION_IN_WORD": 1048576,
+    "SPEAK_PUNCTUATION_NAME": 2097152,
+    "DOT_AFTER_LAST_WORD": 4194304,
+    "PAUSE_LONG": 8388608,
+    "INTONATION_FULL_STOP": 0,
+    "INTONATION_COMMA": 4096,
+    "INTONATION_QUESTION": 8192,
+    "INTONATION_EXCLAMATION": 12288,
+    "INTONATION_NONE": 16384,
+    "TYPE_NONE": 0,
+    "TYPE_EOF": 65536,
+    "TYPE_VOICE_CHANGE": 131072,
+    "TYPE_CLAUSE": 262144,
+    "TYPE_SENTENCE": 524288,
+    "NONE": 16384,
+    "PARAGRAPH": 524358,
+    "EOF": 589864,
+    "VOICE": 147456,
+    "PERIOD": 524328,
+    "COMMA": 266260,
+    "SHORTCOMMA": 266244,
+    "SHORTFALL": 262148,
+    "QUESTION": 532520,
+    "EXCLAMATION": 536621,
+    "COLON": 262174,
+    "SEMICOLON": 266270
+  },
+  "rangeCount": 128,
+  "typedArrayBytes": 1536,
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt and licenses/espeak-ng/COPYING.UCD.txt",
+  "moduleSha256": "d2ba75d02c250028c053f71380f14bb43af4b869bc9ce1c72d1f8c71406fe859"
+}

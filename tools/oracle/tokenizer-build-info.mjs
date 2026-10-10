@@ -1,0 +1,32 @@
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { root, config, fileHash, sha256, git, buildIdentity, validateReference } from './trace-build-info.mjs';
+export const tokenizerRoot = path.join(root, 'build/oracle-tokenizer');
+export const tokenizerSource = path.join(tokenizerRoot, 'source');
+export const tokenizerBuild = path.join(tokenizerRoot, 'build');
+export const tokenizerPatch = path.join(root, 'tools/oracle/patches/tokenizer-boundary.patch');
+export const tokenizerHelperSource = path.join(root, 'tools/oracle/tokenizer-oracle.c');
+export const tokenizerBinary = path.join(tokenizerRoot, 'tokenizer-oracle');
+export const tokenizerBoundsObject = path.join(tokenizerRoot, 'translate-bounds.o');
+export const tokenizerDiff = () => execFileSync('git', ['-C', tokenizerSource, 'diff', 'HEAD', '--no-ext-diff', '--binary']);
+export function validateTokenizerBuild() {
+  const stamp = JSON.parse(readFileSync(path.join(tokenizerRoot, 'build-stamp.json'), 'utf8'));
+  assert.equal(stamp.schemaVersion, 1, 'Unknown tokenizer build stamp');
+  assert.equal(stamp.upstreamCommit, config.commit, 'Tokenizer upstream changed');
+  assert.equal(git(tokenizerSource, ['rev-parse', 'HEAD']), config.commit, 'Tokenizer checkout moved');
+  assert.deepEqual(stamp.cmakeOptions, config.cmakeOptions, 'Tokenizer build options changed');
+  assert.equal(stamp.patchSha256, fileHash(tokenizerPatch), 'Tokenizer patch changed');
+  assert.equal(sha256(tokenizerDiff()), stamp.patchSha256, 'Tokenizer checkout differs from patch');
+  assert.equal(git(tokenizerSource, ['ls-files', '--others', '--exclude-standard']), '', 'Unknown tokenizer source files');
+  assert.deepEqual(stamp.reference, validateReference(), 'Reference build/data changed');
+  assert.deepEqual(stamp.instrumented, buildIdentity(tokenizerBuild), 'Tokenizer build/data changed');
+  assert.equal(stamp.reference.dataFingerprint, stamp.instrumented.dataFingerprint, 'Tokenizer data differs');
+  assert.equal(stamp.helperSourceSha256, fileHash(tokenizerHelperSource), 'Tokenizer helper source changed');
+  assert.equal(stamp.helperBinarySha256, fileHash(tokenizerBinary), 'Tokenizer helper binary changed');
+  assert.equal(stamp.boundsObjectSha256, fileHash(tokenizerBoundsObject), 'Tokenizer bounds object changed');
+  assert.deepEqual(stamp.boundsFlags, ['-fsanitize=bounds', '-fno-sanitize-recover=bounds'], 'Tokenizer bounds checks disabled');
+  for (const [name, hash] of Object.entries(stamp.libraries)) assert.equal(fileHash(path.join(tokenizerBuild, name)), hash, 'Tokenizer library changed');
+  return { stamp, fingerprint: sha256(JSON.stringify(stamp)) };
+}

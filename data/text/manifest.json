@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "en-us-text-character-data",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "reference": {
+    "executableSha256": "492bdd6492372340ba6f2085cf89bb0eb1fc5df62d01b8a2c6bed7a935b6a9ba",
+    "cmakeCacheSha256": "9927eb9e21b4d8af50478437e7273ca1309118ec6987e48db9641e44f5debd95",
+    "configHeaderSha256": "843dbcbc1ecd51d5f5285db3cf82d5778151e46a115248736844aad5bad26d69",
+    "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880"
+  },
+  "sources": [
+    {
+      "path": "src/libespeak-ng/common.c",
+      "sha256": "67ca6883876a4244988cd3aca57f5fcbe4a0931b3c4251bf027e8588aef9d281"
+    },
+    {
+      "path": "src/libespeak-ng/translate.c",
+      "sha256": "826204021a151e037f3bcb3ea7d8250c685165b05be5b1e692d4409426c88eb8"
+    },
+    {
+      "path": "src/libespeak-ng/translate.h",
+      "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+    },
+    {
+      "path": "src/libespeak-ng/tr_languages.c",
+      "sha256": "b166378ae39efdd4e998e00fa70410168627efb61268bcc1dc6d832bef207aa1"
+    },
+    {
+      "path": "src/libespeak-ng/dictionary.c",
+      "sha256": "f4e7080b60eb8f61b6d9b80caa8d34632af74178035fc3420afa17e6d1857603"
+    },
+    {
+      "path": "dictsource/en_rules",
+      "sha256": "5956c288e962a8a5fb7d235d7b420f287bf1bbfcc4199ff4553aa67ad3573c47"
+    }
+  ],
+  "libraries": [
+    {
+      "path": "src/libespeak-ng/libespeak-ng.a",
+      "sha256": "99b81da9a0779691ba11b407913a13122c90a2f27c415e52835997d1afdb687c"
+    },
+    {
+      "path": "src/ucd-tools/libucd.a",
+      "sha256": "052fdf0ca8a94d6581de519f33cd565df3d18a7e7ecf01d3e28c4136f28f0207"
+    }
+  ],
+  "exporterSha256": "66b781514e8e4a364bc2736269607e42aac12e73524a8fc1932cf44cd8bb5f41",
+  "generatorSha256": "49ba17f1790ba49049862f5842a769a2f848de01b0265959ddeb4250d20f1059",
+  "profile": {
+    "voice": "en-us",
+    "translatorName": 25966,
+    "dotlessI": 0,
+    "letterBitsOffset": 0,
+    "ideographs": 0,
+    "altAlphabet": 0,
+    "altAlphabetLanguage": 25966,
+    "toneNumbers": 0,
+    "capsInWord": 0,
+    "apostrophe": 0,
+    "punctWithinWord": [
+      39
+    ],
+    "charPlusApostrophe": []
+  },
+  "replacementBytes": 116,
+  "replacementEntries": 18,
+  "replacementStreamSha256": "c15252f43b434c51842242a8dcdb0d983804760b667e1b72b77ddfbb8accd1a6",
+  "alphabetEntries": 28,
+  "exportSha256": "6a95703574e4509956a0bb29fa2a2eb40bc14d54a8637fa7ce05e08f0a1b0624",
+  "moduleSha256": "4d1c9bc74dcd65feae42204cc0736de4db0b526a79d49bb99b53c7c7c6e1da92",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}

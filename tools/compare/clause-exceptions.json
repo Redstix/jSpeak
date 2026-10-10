@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "profile": "read-clause-en-us-v1",
+  "policy": "Reviewed fixed-input M02.1 dependency gaps, not compatibility passes. All other fixtures must compare without unsupported errors. New gaps require explicit review; changes must not downgrade existing supported fixtures.",
+  "exceptions": [
+    {
+      "id": "smoke-004",
+      "inputSha256": "11722757009524b4557cc6be74a1e0dcdc00805261502cf8caa31212067d387e",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8230,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-unicode",
+      "inputSha256": "5b4bd3177431f3f56a40e9fef2b0c18467fcfeb75e44abe2f0e3b17c2c95d50e",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8230,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-later-clause",
+      "inputSha256": "b685f9683148c966ffcaea08d9ded8f446b421e09a019eb8cf8ad75133e02599",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8230,
+      "clauseIndex": 1
+    },
+    {
+      "id": "seed-1592639746-text-24",
+      "inputSha256": "672232fc40ed4c9e7e932f1c36269cef11769ab4308f852a7ad6fcba18b5fb53",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8230,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-ueaf",
+      "inputSha256": "b9efd7defaa1a7017a36cb438bbc996153ea256c8ce844e2a0d8e01632bebe33",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 3759,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-u1801",
+      "inputSha256": "1052502899ebbc1e789147d7b69964a09660762ccd18aefa0203a6b5ab22358a",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 6145,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-ufe19",
+      "inputSha256": "012f28f25af9b15850ddcf2d9e4980b26b810f03e54da29fd481916cb052a209",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 65049,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-u22ee",
+      "inputSha256": "ff55437c9195b8f83479f6378d9c97ff662e112ab60ad245c7d87a5388e79d02",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8942,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-u22ef",
+      "inputSha256": "9201b2b62949ff667c405a8872cb63c17d932bf48bba4ba737dd29b54dd7e9a8",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8943,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-u22f0",
+      "inputSha256": "98efa7882ff9065e2d4f825b5027cdfc5eaf9490bd7a215aabe5b17e8be6f6bc",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8944,
+      "clauseIndex": 0
+    },
+    {
+      "id": "ellipsis-u22f1",
+      "inputSha256": "c32eaace71dc43fea58d2cc8f4707ec4c65f8f5913a2e254ab74a7f1e278665d",
+      "reason": "punctuation-name-dictionary",
+      "codepoint": 8945,
+      "clauseIndex": 0
+    }
+  ]
+}
