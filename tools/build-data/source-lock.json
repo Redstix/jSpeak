@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "profile": {
+    "voice": "en-us",
+    "speed": 175,
+    "pitch": 50,
+    "amplitude": 100,
+    "inputEncoding": "UTF-8"
+  },
+  "sourceDataFingerprint": "f50aa43366fafe7a8fdb74bb99fd17a685dafda5eb17e50ef7f92a0a322ffea9",
+  "sourceFileCount": 383,
+  "files": [
+    {
+      "sourcePath": "en_dict",
+      "byteLength": 182152,
+      "sha256": "621c5825c37cff4510ab4e9a724314587995c78bcb86675d21964fe896ad2d4c"
+    },
+    {
+      "sourcePath": "intonations",
+      "byteLength": 2584,
+      "sha256": "c4ff28c76c30cf7d9f07643e08ec39e68769ef648098269b5c0ab7731218e219"
+    },
+    {
+      "sourcePath": "lang/gmw/en-US",
+      "byteLength": 257,
+      "sha256": "41534c2a22df5dd4f1052ff9e1a33a3ea7bff5a26b5c02bdad5ba8ddb7524704"
+    },
+    {
+      "sourcePath": "phondata",
+      "byteLength": 600104,
+      "sha256": "fbf85d4b2d5ed7f0da20e22a3063cfb2ad0bb36cfb322d5e21a2e9710ad509b7"
+    },
+    {
+      "sourcePath": "phonindex",
+      "byteLength": 48856,
+      "sha256": "178d6c50c3d9e62303dcc3090348629b50a648ed12f8a831b444a558d112d783"
+    },
+    {
+      "sourcePath": "phontab",
+      "byteLength": 64056,
+      "sha256": "7462b1d693c4f46b394308052a3ab9f824ff03e1a6ab2ca434fdde0283f4b444"
+    }
+  ],
+  "audio": {
+    "text": "Hello world",
+    "sha256": "a10febc9b504c155d06f1656007536eb9ca85295c75d42fa0ddfedf15be97396"
+  }
+}

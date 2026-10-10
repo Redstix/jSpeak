@@ -1,152 +1,187 @@
-# jSpeak 正式开发计划 — 2026-10-05 定稿
+# jSpeak 最终实施计划 — 2026-10-05 修订版
 
-> 本计划在探针系列（0.1.0–0.3.1，四轮真机）完成后制定，是上下文压缩后的**执行恢复点**。执行前必读：`design/stages/AGENT_PROTOCOL.md`（12 条不可违反约束）、`docs/COMPATIBILITY_SPEC.md`、`docs/TRACE_FORMAT.md`、`docs/RUNTIME_PROFILE.md`、`docs/SOURCE_MAPPING.md`、`docs/STATUS.md`（当前状态）与 `docs/device-results/`（证据链）。
+本计划是实施基线。D1当前候选的装载/驻留、A1的22050Hz包内与完整WAV播放已由0.4.0真机确认；0.4.1精确缓冲修复后9/10增量写入、头回填、读回/播放/清理及听感通过；M00 前端 Trace Oracle 首个切片与 M01 固定 UTF-8/Unicode 原语已实现并验证，M02.1 ReadClause/标点属性切片已通过限定范围差分，完整M02及后续JS发音引擎仍在推进。当前状态见 [STATUS](STATUS.md)，恢复入口见 [HANDOVER](HANDOVER.md)。
 
-## 1. 目标与不变约束
+## 1. 目标、范围与文档效力
 
-- **目标**：eSpeak NG 纯 JS 行为兼容移植（无 WASM/原生模块/神经 TTS），最终运行于 Xiaomi Vela JS 应用（Redmi Watch 5，设备 API 1200，`ap / 0.0.0`）。上游 C 实现是唯一行为 oracle。
-- **术语**：目标平台官方名称为 **Vela JS 应用**（iot.mi.com/vela/quickapp 站点自名），非手机快应用联盟规范、非 openvela。
-- AGENT_PROTOCOL 全部约束有效，重申三条最常触发的：
-  1. 不发明发音规则、不静默省略行为——不支持的必须报告并测试；
-  2. 差分测试未通过前不做行为性优化；
-  3. 核心代码不耦合 Vela/Node/DOM/文件系统 API。
-- **不伪造验证结论**：已证实/未验证/不支持三态必须区分；探针微基准不等于 TTS RTF。
+目标：将固定版本 eSpeak NG 行为兼容地移植为纯 JavaScript，在 Redmi Watch 5 的 Xiaomi Vela JS 应用上完成英文文本合成和播放。首发为有明确输入上限的短句文件播放；长文本按上游 clause 边界逐步处理，不承诺文件间无缝播放。
 
-## 2. 设备事实基线（四轮真机，全部有据可查）
+- 上游锁定 `ba90c8e9f440ad544f674a790bb5f53878b6ffc5`；构建选项以 `upstream.json` 为准，CMake Release 静态参考构建。
+- 首发 profile：纯文本、`en-us`、语速 175、音高 50、音量 100、UTF-8、确定性随机源 `-D`。核心输出保持当前 Oracle 的 **PCM16 / mono / 22050Hz**。
+- 遵守 [AGENT_PROTOCOL](../design/stages/AGENT_PROTOCOL.md) 全部约束：无 WASM、原生模块、Web Speech、神经 TTS 或外部发音引擎；不发明规则、不静默省略行为、不以优化改变未验证行为；核心无 Node/DOM/Vela/文件系统依赖。
+- SSML、其他 voice/合成后端、语速等产品 UI 不进入首发；非拉丁输入仍须验证 en-us 上游行为。无法复现的分支明确报告、测试并列入支持清单，不静默丢弃。
+- 原始 M00–M16 编号与职责保留。原 ZIP 和 `design/stages/M*/DESIGN.md` 作为历史设计保持不变；实施前同时读对应 DESIGN、本文和专项契约。本文明确修订执行顺序、设备出口、开发数据格式及首发范围，其他细节继续遵守 [兼容性](COMPATIBILITY_SPEC.md)、[Trace](TRACE_FORMAT.md)、[运行时](RUNTIME_PROFILE.md)、[源码映射](SOURCE_MAPPING.md) 契约。
+- `design/speak-patch.md` 是设计评审材料：采纳 Trace Oracle、真实依赖切片、早期 fuzz、源码映射和设备可行性验证；不采纳未经审查的 PCM 容差、预先 flatten 或另造发音算法。新的冲突须先修订契约，不能在实现中自行选择较宽松验收。
 
-### 2.1 语言与运算语义（0.1.0/0.2.0 实证）
+## 2. 已核验基线
 
-TypedArray(64KiB)/DataView(字节序)/Math.imul/32-bit 移位：全 PASS。计算 hash（65536 次异或移位）跨端一致 `437906867`（两轮复证）。
-
-### 2.2 音频出口（已定案）
-
-- `@system.audio` **只能文件播放**（src/stop/onplay/onended/onerror），**无原始 PCM 流式写入接口**——PCM streaming 路线在此平台不存在，不再探索。
-- 路线：合成 → 完整 WAV 文件 → 播放。两级实证：
-  - 包内预置 WAV 播放出声（0.1.0 用户确认约 2 秒嘟声）；
-  - 运行期 JS 生成 WAV → 写入 `internal://files` → 全字节读回校验 → 播放 → ENDED → 用户确认双音听感顺序正确（0.2.0，64044 字节，SHA256 校验链完整）。
-- 明确记录：这是**非流式**方案；短句预生成、长文本分段落文件是后续产品形态问题（M11/M13）。
-
-### 2.3 文件 I/O（已定案）
-
-- `internal://files`：readText/writeText/readArrayBuffer/writeArrayBuffer/delete 全 PASS（64KiB 实证，逐字节校验）。运行期产物（WAV 等）放这里。
-- **包内资源读取的类型门槛**：`file.readArrayBuffer('/common/x.txt')` 可读；`.bin/.dat/.wav` 扩展名拒绝 `202 invalid file type`（大小写不敏感）；**校验仅看文件名扩展，无内容嗅探**（0.3.1 C1：.txt 名 + 纯二进制内容 64KiB 读取成功，hash 与本地逐字节一致）。
-- **尺度与随机访问**（0.3.1）：256KiB 全量读 PASS（读+hash 2048ms，与 64KiB/454ms 近线性）；包内路径 `position/length` 部分读 PASS（2KiB 切片，hash 一致，129ms）。
-- **关闭的出口**：`copy` 包内源→internal 一律原生 `InternalError: invalid parameter`（.txt/.bin 均拒，构建身份已确认）；`access` 包内路径一律 `invalid parameter :path`。官方契约与此差异记录在 `docs/research/2026-10-04-vela-file-api-package-resources.md`。
-
-### 2.4 装载方案定案（ADR-2）
-
-**包内 .txt 直读**：eSpeak 数据文件内容保持二进制原样，仅文件名使用 `.txt` 扩展打包进 RPK `common/`；小文件全量 `readArrayBuffer`，大词典用 `position/length` 分页随机访问。不需要 base64/文本编码，不需要 copy 缓存，不需要构建期 JS 数据模块。
-
-### 2.5 性能基线（供后续对照，非 RTF 结论）
-
-| 测量 | 数值 |
+| 项目 | 当前事实 |
 |---|---|
-| 包内 64KiB 读+hash | 454ms |
-| 包内 256KiB 读+hash | 2048ms |
-| 包内 2KiB 切片读+hash | 129ms |
-| 计算 65536 次分片（32×2048） | total 475ms；窗口和 67ms；max 4ms；首等 158ms；后续等待 p50/p95/max=8/9/9ms |
-| 双音生成（2s 音频，63 片） | 534ms；maxSlice 77ms（未定位，非 eSpeak DSP） |
-| internal 64KiB 写+全量读+部分读全链 | 1807ms |
+| 阶段文档 | M00–M16 共 17 份，已由 `8f8d39e` 提交；本轮逐份与 ZIP 比较，字节相同，无需重新解包 |
+| 本地验证 | 2026-10-05 审查复跑 `npm test` 42/42；`npm run test:oracle` 22 例重复一致，仅证明 C 自身可重复 |
+| 后续实施验收 | D1/A1 与 M00/M01 工具集成后 Node 100/100、0 skip；M01 2430 个 decoder case与全部1114112码点 C/JS exact，见 build-results/2026-10-05-m01-unicode.md |
+| 当前实现 | D1/A1 探针与 M00 部分前端 Trace Oracle 已实现；M01 原语全码点 C/JS 差分通过；尚无 JS phonemizer、合成器或完整引擎兼容结论 |
+| 设备 | Redmi Watch 5；432×514；API 返回 `ap / 0.0.0 / API1200`，真实固件/引擎版本仍待记录 |
+| 运算原语 | 被测 TypedArray、DataView、Math.imul、32-bit shift 通过；计算 hash 跨端一致 `437906867` |
+| 包内读取 | `.txt`名真实phondata600104B全读、32KiB分页、高偏移/跨页/末尾/EOF已证；898009B候选驻留/组装通过，不代表任意容量或完整reader初始化通过 |
+| 关闭的候选 | 已测包内 `.bin/.dat/.wav` 读取被拒；包内源 copy/access 失败；实施不依赖这些出口 |
+| 音频出口 | 16000Hz 双音：JS 生成 → internal WAV → 全字节读回 → 播放 → 用户确认出声；22050Hz参考短句的包内/完整文件两路也已确认相同、较清晰 |
+| 分块写文件 | 46424B WAV整写与append/非零position分块写入、最终头回填均已真机逐字节读回/播放/清理通过，用户确认清晰完整一致；0.4.1回报未含READY页头，见第六轮设备记录 |
 
-### 2.6 未证事项（禁止默认成立）
+固定构建中的候选基础数据如下。**此表不是已经确认的 en-us 完整依赖闭包**；还须核对 voice 元数据、继承、语言切换及其他间接资源。
 
->256KiB 单文件尺度；真实数据规模下的启动耗时与峰值内存；连续合成 RTF/欠载/取消延迟；峰值 heap；长时稳定性与重复运行增长；Files 分区容量上限（官方语义"较小的永久文件"）。
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `en_dict` | 182152 | `621c5825c37cff4510ab4e9a724314587995c78bcb86675d21964fe896ad2d4c` |
+| `phontab` | 64056 | `7462b1d693c4f46b394308052a3ab9f824ff03e1a6ab2ca434fdde0283f4b444` |
+| `phonindex` | 48856 | `178d6c50c3d9e62303dcc3090348629b50a648ed12f8a831b444a558d112d783` |
+| `phondata` | 600104 | `fbf85d4b2d5ed7f0da20e22a3063cfb2ad0bb36cfb322d5e21a2e9710ad509b7` |
+| `intonations` | 2584 | `c4ff28c76c30cf7d9f07643e08ec39e68769ef648098269b5c0ab7731218e219` |
 
-## 3. 架构决策记录（ADR 摘要）
+合计 897752 字节，约 877KiB；这是文件大小，不能充当启动峰值内存。`phondata` 头与本轮 Oracle WAV 均为 22050Hz。需要验证的 >256KiB 文件首先是 `phondata`，不是当前 178KiB 左右的 `en_dict`。
 
-- **ADR-1 音频**：完整 WAV 文件播放（运行期生成 → internal → `@system.audio`）。PCM streaming 在此平台无 API 路线，已关闭。
-- **ADR-2 装载**：包内 .txt 直读 + `position/length` 分页（见 2.4）。
-- **ADR-3 隔离**：核心纯 JS（typed arrays/整数 ID/复用缓冲，避免热路径对象分配）；Vela API 只出现在 `apps/` 适配层与探针。
-- **ADR-4 验证**：C oracle 差分是最终裁判；trace 按 `docs/TRACE_FORMAT.md` envelope；探针数据只进 `docs/device-results/` 并带证据等级。
-- **ADR-5 交付纪律**：探针/应用构建带**构建戳**（页头显示，generate-assets 生成 `src/build-stamp.js`，gitignore，README 维护 stamp→SHA256 映射）；dist/ 不入 git，SHA256 留痕于文档；**当前会话模型不支持图片输入**——用户结果以逐行转录为准；探针侧已知措辞瑕疵：copy 失败后清理对未创建文件显示 "301 leftover"，应表述为"无需清理"（copy 出口已关闭，无需修复）。
+设备证据：[0.1.0](device-results/2026-10-02-probe-0.1.0.md)、[0.2.0](device-results/2026-10-02-probe-0.2.0.md)、[0.3.0](device-results/2026-10-04-probe-0.3.0.md)、[0.3.1](device-results/2026-10-05-probe-0.3.1.md)。原记录保留历史推断，当前结论以本文和 STATUS 的汇总为准。
 
-## 4. 阶段计划（对齐 M00–M16；关键门 = M06/M10/M12/M14/M16）
+## 3. 架构决定
 
-原始阶段设计在 `design/espeak-ng-js-stage-designs.zip`（未解包每阶段 DESIGN.md——恢复后第一件事补齐）。执行某阶段前必须读对应 DESIGN.md；ZIP 内无则按 `design/stages/README.md` 的 gate 定义先补写 DESIGN.md 再实现。**不提前实现后续阶段**；跨阶段依赖建最小接口。
+### 3.1 数据：先忠实驻留，按证据决定分页
 
-### M00 Oracle 收尾（当前：CLI smoke 已过，内部插桩未做）
+构建工具从固定 C 构建获取数据，保持原始字节，仅映射为包内 `.txt` 名；生成版本化外部 manifest，不修改上游二进制头。核心接收经校验的字节数组、显式 profile 和状态。
 
-已完成：上游锁 `ba90c8e9f440ad544f674a790bb5f53878b6ffc5`（profile：en-us/175/50/100/UTF-8/`-D`，CMake Release 静态）；22 例 CLI smoke 两遍一致（空输入不生成 WAV 已显式记录）；PCM16/WAV 比较器与严格 WAV 解析器；构建 stamp 校验绑定上游 commit/选项/产物 hash。
+首版 Node 正确性实现采用驻留数据。D1 已在0.4.0验证当前六文件候选同时驻留；设备首版先沿用全读驻留，最终数据集和reader初始化须另测。上游 `LoadDictionary`、`LoadPhData` 使用整块数据和内部索引，不能直接把同步 reader 换成系统异步回调。
 
-剩余：
-- **M00a 内部 trace 插桩**：按真实源码观察点（对照 `docs/SOURCE_MAPPING.md`）在 C 侧输出结构化 trace（envelope 见 TRACE_FORMAT），配 schema 校验器。观察点候选：译码入口、TranslateWord/LookupDict2/字典读取、SetWordStress、音素输出级、Wavegen 入口。
-- **M00b 语料扩充**：22 例 → 结构化语料（边界字符、多子句、数字/标点/缩写、长短句梯度），每例两遍一致 + trace 稳定。
-- **M00c trace 消费端**：JS 侧重放/对比 harness（为 M06 差分服务；比较器已有，缺 trace 级）。
+三种策略分别判定：
 
-### D1 真实数据装载管线（探针→迁移合流点；M01 的设备侧前置）
+1. 全文件读取并驻留：默认候选，记录总体容量、初始化临时副本和耗时。
+2. 分块读取后组装为完整数组：仅解决单次 I/O 限制，不宣称降低最终驻留内存；计入组装缓冲与临时块的峰值。
+3. 按需分页且限制缓存：只有驻留预算或测量结果要求时才启用。实施前补页大小、页数上限、跨页读取、借用缓冲寿命、缺页暂停/恢复、取消及过期回调契约；核心返回数据需求，由适配层取数，核心不调用系统文件 API。驻留与分页执行同一 trace/PCM 差分。
 
-- D1.1 从 oracle 构建产物提取 en-us 真实数据文件（en_dict、音素表等），记录每个文件的字节长度与 SHA256。
-- D1.2 打包器（tools/）：数据以 `.txt` 扩展名复制进 app 包 `src/common/`（**内容二进制原样，绝不转码**），生成清单文件（打包名→原文件→hash）。
-- D1.3 设备装载校验（probe 0.4.0，复用现有探针模式）：全量装载 + hash 校验 + 分页装载 + 耗时记录。**Gate：实测 >256KiB 尺度、真实启动耗时**。
-- D1.4 内存观察：装载后保守内存探针（不做 OOM 极限测试）。
-- 注意：若 en_dict >256KiB 且全量读受限，分页读已证明可行（C3），风险低。
+先保留共享音素/波形资源，不按名称猜测可删除项。M13 才冻结生产格式及裁剪结果。数据语义不因为文件扩展名而变成文本。
 
-### M01–M06 Phonemizer（文本→音素；M06 = 关键门）
+### 3.2 音频：核心输出分片 PCM，设备消费完整文件
 
-- M01 音素表/数据结构加载（消费 D1 管线产物），JS 数据访问层。
-- M02 字典查找（en_dict 编译格式解读，严格按上游 reader 语义，逐字段对照）。
-- M03 字母→音素规则（enrules）。
-- M04 重音/元音/语调（SetWordStress 等——差分要求最严区段，trace 级对比）。
-- M05 文本规范化（数字/标点/特殊形式）。
-- **M06 门**：文本→音素全链路，C/JS trace 差分在扩充语料上全绿，独立可测。未过门不得进入 M07。
+纯 JS 核心始终输出有界 PCM 块；M11 负责缓冲所有权、背压、取消和调度。Vela 适配层将输出组织为完整 WAV 后交给 `@system.audio`；项目不依赖原始 PCM 播放 API。
 
-### M07–M10 DSP（合成；M10 = 关键门）
+核心保留 22050Hz 以通过 Oracle 差分。A1 已证22050Hz参考短句可直接播放；后续只有确认需要时才增加独立重采样适配，并单独规定转换算法、状态和分块一致性测试。禁止只改 WAV 头，或把 16kHz 设备探针当成核心采样率规范。
 
-M07 波形框架（上游 sample source/klatt 结构）→ M08 音素→参数 → M09 PCM16/16kHz/mono 输出级 → **M10 门**：音素/文本→PCM 差分（比较容差按 COMPATIBILITY_SPEC；WAV hash 级优先，必要时采样级）。
-从 M10 起所有设备基准必须记录 RUNTIME_PROFILE 规定的完整清单（RTF、首音延迟、maxSlice、队列水位、欠载、取消延迟、重复运行增长）；双音 maxSlice 77ms 异常片在此阶段定位。**设备实测前不承诺实时可用**。
+WAV 分块落盘是否可用由 A1 决定。若可用，有限 PCM 队列写完再播放；若不可用，首版只接受容量内短句并使用有上限的 WAV 缓冲。长文本需验证 clause 分段文件队列及释放策略，不能任意按字符切段、静默截断或宣称无缝播放。
 
-### M11–M12 Vela 集成（M12 = 关键门）
+### 3.3 兼容：结构精确，PCM 默认精确
 
-M11 适配层：WAV 文件出口（0.2.0 已证路线）、会话/取消/生命周期（探针已证模式：token 隔离迟到回调、scratch 清理契约）。M12 门：真机播放完整合成语音（用户听感确认）。
+解码、边界、词典/规则、音素表与 ID、VM 分支/状态、整数韵律命令均 exact。PCM 比较先验证 profile、采样率、样本数，再比较采样值；WAV 整文件 hash 用于重复性和产物校验，不能取代 PCM 语义比较。
 
-### M13–M16 生产化
+当前无批准的 PCM 容差。出现差异先定位整数截断、溢出、浮点、随机与初始状态；确需例外时先形成命名例外、原因、具体阈值和回归测试，再更新兼容性契约。听感不替代差分。
 
-M13 长文本/内存策略（有界输入、分片合成、资源释放）；M14 资源优化（**仅在差分全绿后**：包体、启动、内存，基于真实数据基线）；M15 稳定性（长时/重复/前后台）；M16 上游同步流程（锁 commit 再同步规则）。
+## 4. 立即执行的基础工作
 
-## 5. 压缩后恢复点——立即执行顺序
+以下为任务规格；已实现范围和未通过的门以 STATUS 为准，不能把本地工程完成等同于真机验收。
 
-1. **解包阶段设计**：从 `design/espeak-ng-js-stage-designs.zip` 提取每阶段 DESIGN.md 到 `design/stages/`（原始 ZIP 保留不动；内容不改；单独 commit）。与 `design/speak-patch.md` 一并核对其角色。
-2. **D1 真实数据装载管线**（第 4 节规格；probe 0.4.0 模式成熟，可派 fixer 复用会话 `ses_ef9c7375cffeMzWMku2lNGAISE`——其上下文含全部探针工程模式）。
-3. **M00a trace 插桩**（tools/oracle 侧，与 D1 不同目录，可并行派发）。
-4. 每完成一步：更新 `docs/STATUS.md`、必要证据进 `docs/device-results/`、独立复跑测试后 commit（`work/bootstrap` 分支，无 remote，Co-Authored-By: Claude Code）。
+### D1：真实数据打包与装载探针（probe 0.4.0）
 
-### 工程事实速查
+写入范围：`tools/build-data/`、生成数据/manifest、`apps/vela-probe/` 及相关测试。
 
-- 分支 `work/bootstrap`（main 停在根提交 016fd82）；无 remote/push；提交习惯 `docs:`/`feat:` 前缀。当前 HEAD 系列：`e12f287`(0.3.1 结果) ← `e88ae9e`(0.3.1 交付) ← `ebeeed2`(0.3.0 结果) ← `54e896b`(0.3.0 交付)。
-- 测试：仓库根 `npm test`（42 项全过；pretest 自动生成探针 stamp/assets）。Oracle：`npm run test:oracle`。探针构建：`npm run probe:build` → `apps/vela-probe/dist/org.jspeak.probe.debug.<ver>.rpk`（dist/ 被 gitignore，SHA256 手动留痕文档）。
-- 探针常量：PROBE_BIN_HASH=259309834；TEST_TXT_TEXT/BYTES_HASH=975296040；SLICE_HASH=1037292089；BIG_TXT_HASH=534463728（设备已全部验证）。
-- Vela API 权威文档：`https://iot.mi.com/vela/quickapp/zh/features/data/file.html`、`.../features/other/audio.html`、URI 模型 `.../guide/framework/project-structure.html`。社区参考：`https://docs.luoxe.cn/docs/vela/`（youshen2 维护，非官方逆向文档；MiaoReader `github.com/youshen2/com.bandbbs.ebook` 为重负载 Vela JS 应用实证参考）。
-- aiot-toolkit 2.0.5 / @aiot-toolkit/jsc 1.0.9（用户已授权安装使用）；构建依赖 14 advisories（3 low/11 high）已知，不盲目升级。
-- `apps/vela-probe/user_result/` 是用户截图目录（gitignored）；当前会话模型**不能读图片**，结果让用户逐行转录，模板：版本头（含构建戳）+ 每行状态+关键数字。
+- D1.1 核验数据与 voice 依赖：从 `lang/gmw/en-US`、字典、音素表和读取代码出发，记录上游 commit、构建指纹、每文件原名/包内名/长度/SHA256、来源与许可；区分已确认依赖、保守保留项和排除项。利用隔离的 C 数据目录及目标语料核对结果，不能只凭语料未触发就删除未知依赖。
+- D1.2 实现可复现打包器：同输入生成相同 payload 与 manifest；检查重复映射、缺文件、越界、损坏和版本不匹配；RPK 解包后再次逐文件验证字节与 SHA256。包含真实上游数据的交付同步更新第三方说明和必要许可材料。
+- D1.3 设备验证：`en_dict` 全读；`phondata` 600104 字节全读；固定大小顺序分块扫描；高于 256KiB 的偏移、跨块窗口、末页和精确 EOF。超界请求在适配契约中先检查，设备返回错误/短读均原样记录，不作为完整读取放行。每步比较长度与预先生成的校验值；页校验算法、初值、溢出及边界写入 manifest，不能把现有 32-bit hash 称作 SHA256。
+- D1.4 分别计时 I/O、hash、组装、总初始化；记录冷/热运行、最大同步阻塞、同时存活的字节缓冲及可测 heap。无 heap API 则明确“不可测”，分配成功不等于峰值测量。保守手动测试完整候选驻留集，不做 OOM 探测。
+- D1.5 完成取消、超时、重复启动和迟到回调测试；数据失败不影响其余探针结果，失败数据不得进入核心。
 
-### 协作与委派模式（orchestrator 执行本计划时沿用）
+验收：真实文件字节校验通过、>256KiB 与高偏移行为有设备证据、实际初始化成本可归因、驻留或替代策略有明确结论。若单次全读失败，可用通过校验的分块组装；若总体内存不足，D1 设备装载门保持未通过，先补有界分页契约。设备等待不阻塞 Node 上的 M00–M06 正确性工作。
 
-- 有界实现 → @fixer（探针/工具线；可复用会话）；代码/文档搜索 → @explorer；外部 API 疑问 → @librarian（注意平台是 Vela JS 应用，别查成 quickapp.cn/openvela）；架构/高风险审阅 → @oracle。
-- **审查纪律**：writer 完成后 orchestrator 必须独立复跑测试 + 校验产物（先例：0.3.0 审查抓出 `dstUri` 参数名错误——官方契约参数名与实现不一致，单测 mock 跟着错误实现走，测不出来；这类设备契约 bug 是本项目的典型风险）。
-- 并行 lane 只在写范围不重叠时派发；fixer 产出不自行 commit，由 orchestrator 审查后提交。
+### A1：真实采样率与 WAV 文件消费能力（与 D1 同轮或紧随其后）
 
-## 6. 验证纪律（不可违反）
+写入范围：`apps/vela-probe/` 及文件适配测试。与 D1 共用工程时顺序集成，避免交叉修改。
 
-1. Oracle 是唯一行为裁判；差分不过 = 阶段不算完成，无论本地测试多绿。
-2. 设备证据只进 `docs/device-results/`，带证据等级（官方契约 A / 设备实测 B / 社区 B / 推断 C+）与原始转录。
-3. 微基准与探针耗时数据不作 RTF 结论；实时可用性只有 M10 后的完整真机基准可证。
-4. 交付物（RPK）必须可追溯：构建戳 + SHA256 留痕 + 对应代码 commit。
-5. 每个行为迁移有确定性测试或显式记录的例外（AGENT_PROTOCOL 第 12 条）。
-6. 文档存在 ≠ 功能完成；harness 自检 ≠ C/JS 兼容通过。
+- 使用固定 Oracle 生成的短英文 22050Hz WAV，核对格式、字节、构建身份；测包内播放及经已证路径写入 internal 后播放，分别记录事件与用户听感。
+- 对独占临时文件验证有限块写入、append/position 行为及 WAV 头回填；操作前核对 Vela JS 应用官方参数契约。完整读回与预期字节比较，再播放；覆盖取消、部分失败和文件清理。
+- 0.4.1复测已确认被测46424B文件的append、非零position及头回填可用，见[第六轮](device-results/2026-10-05-probe-0.4.1.md)。采用精确backing缓冲逐块落盘、最终头回填；整写为备选，当前无需双文件封装。容量上限与连续队列仍待后续验收。
 
-## 7. 风险登记
+验收：明确 22050Hz 直接播放或独立转换的路线；明确文件写入方式、支持上限和失败处理。无需等待 JS DSP 完成即可验证设备出口；这些结果不代表 TTS 实时性能。
 
-| 风险 | 状态 | 缓解 |
+### M00：固定上游与 Trace Oracle 收尾
+
+写入范围：`tools/oracle/`、`tools/compare/`、`tests/`、trace/schema 与源码映射文档。
+
+- M00a 双构建：保留未插桩参考构建；补丁放在工具目录，在独立 checkout/build 中应用，不污染锁定的 `upstream/espeak-ng/`。固定数据、编译器/选项和随机状态，验证插桩前后音素与 PCM 相同。
+- M00b 内部 trace：先核验解码、ReadClause、字典/规则选择、TranslateWord、SetWordStress、韵律前音素边界；随后在 M07–M10 各子任务前扩充 mutation、VM、时长/音高、合成命令、波形状态的观察点。每个消费阶段开始前，其观察点必须可用；不以只加 Wavegen 入口声称 DSP 覆盖完成。
+- M00c schema 与比较器：落实 TRACE_FORMAT 的表身份、位宽、单位、初始状态、事件序号和元数据拒绝规则；报告首个语义差异，支持有效边界状态重放。注入错误必须使自动检查失败；同一 C case 两遍 trace 一致。
+- M00d 语料与 fuzz：保留 22 例 smoke；运行与固定配置相容的上游 C 测试，导入与首发 profile 相容的语言回归，记录跳过项及原因；扩充 Unicode、数字、标点、缩写、混合脚本、多子句、长度边界和连续会话。建立固定 seed、超时、保存及缩减失败案例的工具；每次记录 seed、生成数量和覆盖/排除项，有效输入差分与损坏数据健壮性分开。
+
+验收：干净环境可构建，基线/插桩可观测输出一致，schema 和故意错误检测生效，M01–M06 所需 trace/重放可用；提供统一的自动检查入口，差分失败返回非零状态，可在本地或未来 CI 执行。DSP trace 按后续观察点另列待办；只有实际覆盖后才标记完成。新脚本需实际提供并记录后才能写入已可执行命令清单。
+
+## 5. 阶段职责与执行顺序
+
+M 编号是稳定工作项，不是 C 调用顺序。允许前移真实最小依赖，不用 stub 验收，也不借依赖名义提前实现整个后续阶段。
+
+| 阶段 | 保留的职责与关键实现 | 验收 |
 |---|---|---|
-| en_dict 可能 >256KiB | 未证 | D1 实测；分页读已证明可行（C3） |
-| maxSlice 77ms 异常（双音观察） | 未定位 | M10 真实 DSP 基准时定位；若持续影响连续合成调度设计 |
-| Files 分区容量（"较小永久文件"语义） | 未证 | M11 验证运行期 WAV 大小上限 |
-| 差分严格区段（SetWordStress 等）成本高 | 预期 | M00a trace 插桩先行，M04 用 trace 级对比 |
-| toolkit advisories | 已知不升级 | 记录在 THIRD_PARTY_NOTICES.md |
-| 平台文档与实现差异（copy/access 先例） | 已发生 | 一切设备行为以实测为准；官方契约只作参照 |
+| M01 | Unicode/编码；按上游解码、分类、大小写语义处理 code point、NUL、非法 UTF-8 和代理项 | 同输入模式的 code point 与分类 exact |
+| M02 | clause/文本切分；保留词界、标点、数字 token、大小写、停顿及原文位置 | 边界与分类 trace exact，空/长/混合脚本输入有测试 |
+| M03 | 字典 reader/数据加载；忠实读取 `en_dict` 和规则索引，使用版本化外部 manifest；开发期不另造压缩格式 | 查找、标记、未知词行为 exact；损坏数据有界失败 |
+| M04 | 单词翻译；规则匹配、异常词、回退、数字/缩写展开与词重音，归属按真实调用链记录 | 导入的词级回归与规则选择 trace exact |
+| M05 | 数字音素表身份、音素列表和状态；增删改、邻居、词界、重音与停顿 | 韵律处理前音素序列 exact，可直接交给下一阶段 |
+| M06 | 集成文本→code points→clause→词典/规则→音素 | 所选上游回归及至少 1000 条分层语料通过；固定 seed fuzz 无未解释失败；Node 可独立使用 |
+| M08 | 音素表、编译指令 VM、条件、phase 1 mutation 与 phase 2 声音指令；运行时不解析 phsource | profile 可达 opcode/条件逐项有单元、集成和 C 差分；其余明确分类，不能静默跳过 |
+| M07 | 韵律、时长、音高、幅度及邻居影响；结合 M08 后确认最终 mutation/时序边界 | 同初态与音素上下文产生 exact 决策/事件，时长单位明确 |
+| M09 | 从音素/韵律到波形命令，保留共振峰、过渡、噪声、源和波形资源语义 | 合成命令及状态 trace exact，不以简化振荡器替代上游 |
+| M10 | 波形发生器及 PCM；保持随机、滤波、整数/定点和浮点语义；只移植首发实际使用的后端 | 完整英文句子 PCM 默认 exact；22050Hz；不同块大小拼接一致；PCM 工作缓冲不随输出时长增长 |
+| M11 | 有界运行时；PCM 缓冲所有权、背压、调度、取消、输入/中间状态容量和资源回收 | 慢消费者、长输入、取消重启、重复合成通过；超限显式处理，无状态串扰 |
+| M12 | Vela 适配；落实 A1 文件路线，连接数据、合成、播放及页面生命周期 | 真机合成短句实际出声；格式、取消、清理和前后台行为有证据；文件间间隙如实记录 |
+| M13 | 语言/数据最小化；按完整依赖关系裁剪、冻结生产格式和构建 profiles | 可复现数据包、完整依赖/排除清单、体积报告；裁剪前后目标语料 trace/PCM 不变 |
+| M14 | RAM/CPU/Flash 优化；减少分配、复用、缓存与打包，基于实测选择 | 每项有前后基准；差分不退化；完成下述首发资源与稳定性门 |
+| M15 | 中文及其他语言扩展，保留原始职责 | 首发明确延期，不计完成；以后启用时另锁 profile、数据依赖、上游语言语料和音调/PCM 验收 |
+| M16 | 上游同步与维护；源码映射、数据/算法变化分类、兼容 manifest、可复现流程 | 隔离环境完成同步流程演练并输出差异/资源报告；不能仅有说明文档 |
 
-## 8. 本计划之外
+执行顺序：**D1 → A1 → M00 前端 trace → M01 → M02 → M03 → M04 → M05 → M06 → M08 VM → M07 集成 → M09 → M10 → M11 → M12 → M13 → M14 + S1 → 首发**。M00 与设备准备互不依赖的工作可交错；等待设备反馈时推进 Node 工作。M08 的表/属性访问最小切片在 M03–M05 按需前移，完整 VM 在 M06 后先于 M07 集成完成；DSP oracle 插桩可提前，阶段完成不可提前宣称。
 
-- 不做：设备密钥提取、签名绕过、自动极限压力测试、未经差分的性能优化。
-- 产品级功能（音色/多语言/语速 UI）在 M16 前不进入范围；首发单 voice（en-us）。
-- 上游同步（M16）前不 rebase 上游。
+M16 的源码映射从第一个移植模块开始维护，流程演练纳入首发维护交付，不依赖延期的 M15；更换正式上游版本另立变更，在隔离 checkout 中比较，不直接移动当前参考锁。
+
+首轮源码定位入口（仅为入口，完整符号/状态映射由实现者核验并写入 SOURCE_MAPPING）：M01 `encoding.c`/ucd-tools；M02 `readclause.c`；M03 `dictionary.c`；M04 `translate.c`/`dictionary.c`/`numbers.c`；M05 `phonemelist.c`；M08 `synthdata.c`/`synthesize.c`；M07 `setlengths.c`/`intonation.c`；M09 `synthesize.c`；M10 `wavegen.c`。共同 voice/表依赖不可省略。
+
+## 6. 真机可行性与首发验收
+
+### P1：代表性 DSP 切片，尽早发现性能阻碍
+
+在 M08/M09 已有真实状态和 M10 首个可重放波形切片时，立刻测设备；不用等完整引擎。切片须先在 Node 与 C 对齐，记录输入/输出时长、执行耗时、最大阻塞和设备格式。同时调查双音探针 maxSlice=77ms 的异常来源。
+
+切片结果只决定后续调度、缓冲和测量优先级，不能据此宣称全引擎实时。M10 完成后再测完整文本流水线：分别报告纯合成 RTF、包含 I/O 的端到端时间和首音延迟。
+
+### S1：首发稳定性，作为新增工作项而非重命名 M15
+
+M11 起持续运行，M14 后对最终交付构建复验。至少包括：1 秒/30 秒生成样本、超过输入上限的显式错误、100 次短句会话、30 分钟有界运行、慢消费者、取消后立即重启、前后台切换、I/O 失败及临时文件回收。长任务先在 Node/mock 完成；设备任务手动启动、可停止，在已验证的资源上限内执行，不做 OOM/存储耗尽压力探测。
+
+### 发布门与指标解释
+
+- 功能：M06/M10/M11/M12/M13/M14、S1 和 M16 维护演练达到其验收；M15 标为延期。Node/mock 全绿不能替代真机听感与生命周期证据。
+- 正确性：没有未解释的 profile 内差分；例外须命名、记录并测试；不同分片大小、取消后新会话与全新实例的结果一致。
+- 资源：发布前将已测的输入上限、clause/音素/WavePlan 容量、PCM 块与队列上限、文件大小/数量上限写入 RUNTIME_PROFILE；代码执行这些上限。资源 0.5–3MB、RAM 2–5MB 是目标，不是通过证据。
+- 性能：P1 后提出预算，M12 后在优化前冻结首发的启动、首音、maxSlice 和取消延迟阈值，再以 M14/S1 实测验收；未填写阈值只算测量完成，不能称为产品通过。无测量 API 的 heap/固件信息写“不可测/未知”，不得填写推算峰值。
+- 非流式短句产品不把 RTF<1 作为功能播放门；若宣称连续实时生成，必须同时有完整流水线持续 RTF<1、有限队列水位、文件交接间隙和无欠载证据。文件模式不适用的“PCM 硬件欠载”记 N/A，并记录文件队列饥饿/间隙，不能填 0 冒充已测。
+- 必报字段：设备/固件、代码与构建号、数据指纹、冷/热初始化、合成 RTF、端到端延迟、首音、maxSlice、缓冲/文件队列水位、间隙、取消延迟、可测峰值和重复运行增长；每项注明测量方法与边界。
+
+## 7. 执行、测试与交付纪律
+
+1. D1当前候选装载/驻留与A1完整短句播放已通过真机；候选仍为 `closureComplete:false`。0.4.1增量写入修复后9/10及听感已通过，685ms hash峰值保持调查，完整reader/数据预算未测；不能以mock代替。M02.1 ReadClause支持切片已通过598个完整输入exact，41个依赖缺口已登记；接续内部scanner、字典/embedded最小依赖与tokenizer，不跳过完整M02验收。M01范围见UNICODE，源码/状态依赖见M02_SCOPE。
+2. M00 使用独立插桩构建，D1 始终读取未插桩的固定数据快照。工作不能仅按目录判定独立，还须隔离数据、构建目录及生成产物。
+3. 每个行为迁移同时维护源码符号/读写状态、数据转换、trace 边界、回归 case、支持与未支持分支；复用固定上游编译器。M08 不预先 flatten 继承；只有证明与上游等价后才能采用。
+4. 验证顺序：Node 单元/边界 → C 差分/固定 seed fuzz → Vela 语法与能力检查 → mock 生命周期/I/O → 真机。模拟器可用时辅助，不能替代目标设备。
+5. 现有命令：`npm test`、`npm run oracle:build`、`npm run test:oracle`、`npm run probe:build`。其中 pretest 会重生成忽略的 stamp/assets。已补 `oracle:trace:build`、`test:oracle:trace`、`oracle:unicode:build`、`test:oracle:unicode`、`unicode:build`、`test:unicode`、`fuzz:minimize`；详见 README 与专项文档。
+6. writer 的自检之后，执行者独立复核测试、产物及平台契约；尤其不能用与实现同源的 mock 证明 API 参数正确。每完成一个有界任务更新 STATUS 和相关契约；不能以文档或 harness 自检代替阶段完成。
+7. 设备结果写入 `docs/device-results/`，区分官方契约、设备实测、社区资料和推断；保留原始转录/照片来源。交付 RPK 记录代码 commit（未提交构建另记 diff）、版本、可见构建戳及 SHA256；设备回传包含版本头、状态、关键数值与听感。未确认构建身份则不升级为确定结论。
+8. 分支沿用 `work/bootstrap`，无 remote，不配置 remote、不 push。实施提交保持有界并据实注明贡献者；不依赖历史 agent 名称、会话 ID 或模型能力描述。未提交的交付以实际源码快照和 manifest 绑定。
+9. 不提取设备密钥、不绕过签名；toolkit 安装审计最新为 20 advisories（3 low、17 high），历史 14 项记录保留在 THIRD_PARTY_NOTICES，按实际需要评估，不盲目升级。许可/源码分发材料随真实上游数据及代码交付完善，不拖到最终发布才处理。
+
+## 8. 风险与处理分支
+
+| 风险 | 触发点 | 处理 |
+|---|---|---|
+| 大文件或整体驻留失败 | D1 | 分清单次 I/O 与驻留限制；先分块组装，仍不足再设计有界分页；保留 Node 正确性工作 |
+| 22050Hz 播放失败 | A1 | 确认文件/格式/路径后再决定独立适配转换；核心 Oracle 采样率不变 |
+| WAV 不能增量落盘 | A1 | 验证临时 PCM 封装或采用明确短句容量；长文本能力保持未通过 |
+| 上游内部阶段相互依赖 | M00/M03–M10 | 观察真实状态与调用顺序，前移最小切片；不以占位实现过门 |
+| VM/整数/随机语义差异 | M08–M10 | 首分歧 trace 定位；保持参考平台和初态，不擅自放宽 PCM 阈值 |
+| DSP 太慢或阻塞过长 | P1/M10/M14 | 先检查切片和调度，再在差分保护下优化；达不到预算则明确限制产品能力 |
+| 数据裁剪漏依赖 | D1/M13 | 保守保留、静态关系核验、隔离 C 数据集对照、排除清单和运行时显式缺资源错误 |
+| 文件积累、取消或旧状态泄漏 | M11/M12/S1 | 独占文件名、token、背压与生命周期测试；测实际磁盘/缓冲增长 |
+
+本计划修订解决了旧版恢复点、阶段编号、采样率和分页结论的问题。后续调整以新的源码/设备证据为依据，同时更新本文与专项契约，保留原始设计和设备历史记录。

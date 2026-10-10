@@ -1,45 +1,74 @@
 # Implementation status — 2026-10-05
 
+执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact。尚无完整JS合成器。
+
 ## 已完成
 
-- Git 原始资料基线；工作分支 `work/bootstrap`，无 remote/push。
-- 原始阶段文档解包到 `design/stages/`，内容未改。
-- 兼容性、trace envelope、运行时门槛、源码映射规则草案。
-- PCM16 比较器、严格 WAV 解析器及差异/格式边界测试。
-- 固定 eSpeak NG `ba90c8e9f440ad544f674a790bb5f53878b6ffc5`，本地 CMake Release 静态参考程序和数据构建成功。
-- CLI smoke：22 输入，每例两个独立进程，音素文本与 WAV 哈希一致。空输入不生成 WAV 的行为显式记录。
-- Vela 探针 0.1.0：能力、设备信息、64KiB 资源、分片计算、文件测试音、取消/生命周期清理。
-- `npm test`：31 项单测通过；包含 PCM/WAV、探针能力、分片计时、设备端双音生成、内部文件生命周期和取消清理。
-- 探针 0.2.0 已构建并完成真机测试：包内 bin/dat/WAV 对照、内部文件写入读回、分离首次调度延迟、设备 JS 生成双音后写文件播放。
-- 首轮真机截图确认基础能力通过，用户确认约 2 秒测试音（仅适用于 0.1.0 预置 WAV）。
-- 真机计算 hash `437906867` 两轮均与本地一致。结果见 [首轮](device-results/2026-10-02-probe-0.1.0.md) 与 [第二轮](device-results/2026-10-02-probe-0.2.0.md) 设备结果。
-- 第二轮真机证实：内部文件二进制 I/O 可用（64KiB bin 写入后全字节读回一致；64044 字节运行期生成 WAV 同样 verify 通过）；JS 生成双音 WAV 播放收到 ENDED 事件，用户确认听到低音—停顿—高音、顺序正确。
-- 包内资源 bin/dat/wav 三类均 readArrayBuffer 失败 `202 invalid file type`；同 API 读内部 bin/wav 成功。失败已收敛到包内资源路径，非扩展名问题。
-- 分片计算 #1：total 475ms，测量窗口累计 67ms，maxSlice 4ms，首次调度等待 158ms，后续等待 p50/p95/max = 8/9/9ms。无双音的 #2/#3 独立测量证据。
-- JS 双音生成：total 534ms / 63 片 / 2s 音频，maxSlice 77ms（原因未定位；非 eSpeak DSP，不代表合成 RTF）。
-- 包内资源根因调查（2026-10-04，官方契约直接核对）：readText/readArrayBuffer 明文支持应用资源路径；write 系列明文排除资源路径；**file.copy 的 srcUri 无限制条款**——“包内→internal 复制”成为首要候选装载出口；readText/copy/access 的包内行为设备未测。判别矩阵与决策树见 [调研记录](research/2026-10-04-vela-file-api-package-resources.md)。术语修正：目标平台为 Vela JS 应用（官方站点自名，非手机快应用联盟规范）。
-- 探针 0.3.0 已构建：判别矩阵 7 行 + 4 个 hash 常量；`npm test` 40 项全过；审查修复 copy 参数名错误（官方契约 `dstUri`，初版误传 `uri`，会使 B4 恒 202 误导结论）。交付 RPK SHA256 `da260c6df3e947f93b015d3e19cdb90a25ba9e551edb996765204b8dd84a7d55`（dist/ 不入 git；0.2.0 磁盘产物已被重建清除，出处以 `883bd7f` 与文档为准）。
-- 探针 0.3.0 真机结果（用户逐行转录，见 [第三轮设备结果](device-results/2026-10-04-probe-0.3.0.md)）：**包内 .txt 资源 readText/readArrayBuffer 双 PASS**（hash 跨端一致）；`.bin` 扩展名仍 202（大小写不敏感）→ "invalid file type" 是**基于文件类型的校验**，非资源路径整体拒绝（修正 0.2.0 C+ 推断）；internal `position/length` 部分读 PASS（词典随机访问原语就绪，64KiB 全链 1807ms）；access(.bin) 与 copy(.bin→internal) 原生报错（copy 存在构建身份歧义，0.3.1 构建戳+C5 复测消歧）；整节 DONE、清理 PASS。装载首选方案修正为"文本扩展名直读"。
-- 探针 0.3.1 真机结果（用户逐行转录，见 [第四轮设备结果](device-results/2026-10-05-probe-0.3.1.md)）：**装载方案定案——包内 .txt 直读**。C1 PASS（.txt 名 64KiB 二进制，内容嗅探不存在，PROBE_BIN_HASH 首次设备验证）；C2 PASS（256KiB，读+hash 2048ms，尺度成立）；C3 PASS（包内 position/length 部分读，词典可分页随机访问）；C4/C5 FAIL（copy 对包内源一律原生 InternalError，构建身份已确认）→ copy→internal 出口关闭，**0.3.0 B4 歧义消解**；C6 FAIL（access 对包内路径一律关闭）。探针侧措辞瑕疵：copy 失败后清理对未创建文件显示 "301 leftover"，应表述为"无需清理"。
+- Git 原始资料基线，工作分支 `work/bootstrap`，无 remote/push。
+- M00–M16 共 17 份原始阶段文档已由 `8f8d39e` 提交到 `design/stages/`；2026-10-05 审查逐份与 ZIP 比较，字节相同。
+- 兼容性、trace envelope、运行时门槛与源码映射契约；最终计划已修正阶段编号、恢复顺序、22050Hz 采样率及分页策略。
+- PCM16 比较器、严格 WAV 解析器与差异/格式边界测试。
+- 固定 eSpeak NG `ba90c8e9f440ad544f674a790bb5f53878b6ffc5`，CMake Release 静态参考程序和数据构建成功。
+- 2026-10-05 审查复跑：`npm test` 42/42；`npm run test:oracle` 22 例重复生成音素文本及 WAV hash 一致。空输入不生成 WAV 已记录。这是 C 自身稳定性检查，尚无 C/JS 兼容结果。
+- 本轮 Oracle WAV 与 `phondata` 头均为 PCM 采样率 22050Hz；本地数据 `en_dict`=182152 字节、`phondata`=600104 字节，其他文件大小/hash 见最终计划 §2。
+- D1 数据工具及 source lock 已实现，六个候选数据文件共 898009 字节；A1 固定 Oracle WAV 为 46424 字节、22050Hz。完整源清单含 383 文件；候选/完整 C 数据对照 26/30 一致（原22全过），动态词典依赖未闭合，见 [DATA_PACK](DATA_PACK.md)。
+- probe 0.4.0 构建和独立解包校验通过，stamp `B261005T065730`；RPK SHA256 `68479bf28bf36e2949c34e173086e58fb3ecc63c6b9b3cbf1ccbbd371d8c2908`。实现 D1 全读/分页/驻留/组装及 A1 三种文件写入模式；设备结果已另行记录，见 [构建记录](build-results/2026-10-05-probe-0.4.0.md)。
+- M00 隔离插桩构建、严格 schema/比较器、固定 seed 语料及全输入重放已实现；主代理复跑50例（200进程）音素/WAV/trace一致，上游CTest19/19；源checkout保持干净，见 [ORACLE_TRACE](ORACLE_TRACE.md)。
+- 首轮集成验证72项Node单测通过；本轮新增 M01 与缩减工具后主代理独立复验 **100/100、0 skip**，见 [M01 本地验收](build-results/2026-10-05-m01-unicode.md)。这不代表完整M00、JS phonemizer或设备门完成。
+- M01 已实现三种 UTF-8 长度模式、原始字节错误处理、UCD 11.0 分类/简单大小写与编码；2430个解码case、全部1114112码点和26项扩展分类 C/JS exact。运行期分类表68428字节，未测设备峰值。独立 C helper 全码点双库一致，见 [ORACLE_UNICODE](ORACLE_UNICODE.md)。
+- M00 有界字节删除缩减器与真实 Unicode 差分适配入口已实现，保留失败类别/签名、C/JS 来源身份并传播基础设施错误；原始字节与有效 UTF-8 模式分开。刻意注入错误的 CLI 缩减链路独立验证通过，见 [FUZZ](FUZZ.md)。
 
-## 已知限制
+- probe 0.4.0 的原始 OCR 已逐字归档，所有可读长度/hash均匹配；用户确认包内和整写两次播放相同、较清晰，见[第五轮设备记录](device-results/2026-10-05-probe-0.4.0.md)。
+- probe 0.4.1 已构建并解包核验，stamp `B261005T075402`，RPK SHA256 `22353261d791b03eaf34283b03a1757cb77cc162c742842b57fe1ab1d2446604`；新增桥接行为回归后 **103/103、0 skip**，见[构建记录](build-results/2026-10-05-probe-0.4.1.md)。
 
-- 尚无 JS phonemizer、合成器或 C/JS 差分兼容结果。
-- M00 仅完成 CLI reference smoke；内部 trace 插桩、schema 校验器、完整上游语料、fuzz 基础设施仍待实现。
-- 探针仍只验证文件播放路线；原始 PCM streaming、真实 DSP RTF、峰值 heap 均未证实。内部完整 WAV 文件现为已部分验证的音频出口，但不能包装成 streaming。
-- 装载路径已定案（0.3.1）：包内 .txt 直读——二进制内容 + 256KiB 尺度 + 包内 position/length 部分读均实证；copy→internal 与 access 对包内路径关闭。剩余未证：>256KiB 尺度、真实数据规模的启动耗时与峰值内存——留待真实数据装载轮实测。
-- ENDED 事件不等于实际出声；双音听感已由用户确认，但该原则对后续事件类证据仍然适用。
-- maxSlice 77ms 异常片未定位；8–9ms 定时读数涉时钟分辨率/定时器语义，不作硬实时保证。
-- Node/mock 测试不能验证 UX 真机渲染、系统 API 支持或实际出声。
-- Vela 构建依赖安装报告 14 项 advisories（3 low、11 high），未盲目升级破坏 toolkit；见 THIRD_PARTY_NOTICES.md。
-- 未执行完整上游 C 测试套件或模拟器；尚无合成性能验证。
+- M02.1 固定ReadClause状态机、原始top12标点属性与独立C参考已实现；主代理复验639输入（598完整exact、41明确缺口）、1341次clause返回，全1114112码点属性/type差分，128/128 Node测试、0 skip。记录接口、分配、来源及例外，见[M02.1验收](build-results/2026-10-05-m02-clause.md)。
+
+- M02 tokenizer、实际18条字符替换、内部UTF-8 scanner、embedded和真实标点读名已集成。最新990输入=989 exact、7390词条，另1个原C `ab - `+88韩文字导致的 `sbuf[800]` 越界已证并明确拒绝；0服务依赖缺口。完整直接ReadClause另864输入/1695次返回全exact。见[M02.2记录](build-results/2026-10-05-m02-text-services.md)。多clause word翻译调用者尚在集成，不能提前标完整M02/M06完成。
+- M03固定en词典运行时已验收：8399请求、7920lookup、524transpose C/JS一致，含415项共享context核对；独立补查912lookup及22项连续查询，生成数据可逐字节再生。见[字典记录](build-results/2026-10-05-m03-dictionary.md)。
+- 141张原始音素表、36096槽、46107解码case exact；19062词重音case exact；3112直接accent及32字典入口exact。现实际完整LookupLetter1536项+组合accent768项、LookupCharName860项（含+）均exact，先前textmode依赖闭合。见[字符名](CHARACTER_NAMES.md)。
+- M04完整backing+offset规则2596项（146真实全缓冲上下文）及3397 AppendPhonemes exact；RemoveEnding8230项exact；Number/Roman1213项exact。EncodePhonemes跨141表226377项、derived/nonASCII digits65545点exact。各为原函数级证据，不代表整句引擎完成。
+- TranslateWord3/WithBounds正式差分已完成：1372组、1370 exact、10661个词音素比较，0服务缺口；原KEY+0020前缀的两项越界由ASAN独立确认并单列。M05紧凑音素arena与TranslateWord2→clause调度已接通，M06整句到pre-MakePhonemeList在68组原CLI输入、99子句、712次Word2调用、3409个紧凑音素项全部exact，见[CLAUSE_TRANSLATION](CLAUSE_TRANSLATION.md)。M07完整MakePhonemeList输出在99子句、3430行全exact，见[MAKE_PHONEME_LIST](MAKE_PHONEME_LIST.md)。CalcPitches/CalcLengths及之后阶段未验收。
+- M08音素VM已完成固定en-us可达切片：8200组C/JS exact，含phase 1 mutation、phase 2声音指令、条件与邻居查询；409项clean库重复对照。报告 `artifacts/phoneme-interpreter-MrD6Ky/report.json`。这不代表M07 prosody或M09 DSP完成。
+- M07 prosody已完成固定en-us切片：CalcPitches与CalcLengths在99个真实CLI子句、3430行上两阶段全exact；显式注入真实embedded list，避免C全局初始化残留。见[PROSODY](PROSODY.md)与[M07记录](build-results/2026-10-06-m07-prosody.md)。
+- M09 Generate高层事件已完成固定en-us逻辑切片：99个真实CLI子句、19994个高层合成事件全exact。观察器为暴露完整逻辑计划将`N_WCMDQ`放大为4096；原170项有界队列的满队resume和消费调度尚未验收。见[GENERATE_EVENTS](GENERATE_EVENTS.md)与[M09记录](build-results/2026-10-06-m09-generate-events.md)。
+- M10 Wavegen前两个PCM切片已完成：pause/marker在2个纯空白整句、308样本上与原C WAV完全一致；20条独立PlayWave命令、26694样本逐点exact。voiced/spect/WAVE2仍显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10记录](build-results/2026-10-06-m10-wave-pause.md)。
+
+## 设备事实汇总
+
+| 轮次 | 已证事实 | 证据 |
+|---|---|---|
+| 0.1.0 | 被测 TypedArray/DataView/Math.imul/shift 语义可用；包内预置 16000Hz WAV 实际出声 | [第一轮](device-results/2026-10-02-probe-0.1.0.md) |
+| 0.2.0 | internal 64KiB 二进制 I/O；JS 生成 64044 字节双音 WAV 写入/全字节读回/播放，用户确认低音—停顿—高音 | [第二轮](device-results/2026-10-02-probe-0.2.0.md) |
+| 0.3.0 | 包内 `.txt` readText/readArrayBuffer 成功；internal 部分读成功；构建审查修正 copy 参数 `dstUri` | [第三轮](device-results/2026-10-04-probe-0.3.0.md) |
+| 0.3.1 | `.txt` 名二进制 64KiB/256KiB 全读及 2KiB 包内切片校验通过；包内源 copy/access 路线关闭 | [第四轮](device-results/2026-10-05-probe-0.3.1.md) |
+| 0.4.0 | 600104B真实phondata全读、32KiB分页/边界/EOF、898009B候选驻留/组装；22050Hz包内和完整文件播放经听感确认；该版增量写入失败 | [第五轮](device-results/2026-10-05-probe-0.4.0.md) |
+| 0.4.1 复测 | append/position及头回填均46424B全字节一致、onended、清理成功；用户确认清晰完整一致；转录未含READY页头 | [第六轮](device-results/2026-10-05-probe-0.4.1.md) |
+
+当前结论：包内二进制采用 `.txt` 名原样打包直读；internal 保存运行期产物。当前候选集默认采用全读驻留；分页原语及组装可用，完整按需分页缓存尚未实现或验证。0.2.0 的“非扩展名问题”是被后续实验修正的历史推断，不再作为现状。
+
+计算 hash `437906867` 两轮与本地一致。计算 #1 total 475ms、窗口和 67ms、maxSlice 4ms、首等 158ms、后续等待 p50/p95/max=8/9/9ms。双音生成 total 534ms、63 片、maxSlice 77ms；两者均不代表真实 eSpeak 合成 RTF。
+
+## 未完成与限制
+
+- M00 已覆盖 decode、clause、word table、部分韵律前音素；分类原语已有独立参考，但仍缺集成规则选择/词重音、完整内部状态、VM/DSP和完整回归语料。无效 UTF-8 固定 seed 差分与有界缩减基础设施已补，不能推广为完整前端或损坏二进制数据 fuzz。上游本平台已注册19项CTest通过；目标JS语言回归尚未导入为完整差分。
+- M01原语和内部utf8_in/utf8_in2已分别按原函数移植验证；其他输入编码尚未覆盖。尚无完整JS phonemizer、VM或合成器。
+- M02直接断句、词切分、替换表和embedded已实现，省略号可通过注入真实词典服务处理；未提供依赖仍明确拒绝。标点公告当前语料已闭合；完整word翻译后的词计数和多clause翻译集成已在pre-MakePhonemeList边界验收。记录的原C越界不能算JS兼容成功。
+- D1 当前候选字节装载/驻留已实测；完整reader初始化、最终依赖闭包及容量上限未验证。候选至少缺 hy/ko/ar/hi 动态词典；assemble总耗时19764ms、hash14344ms、maxHashCopy685ms，保留性能调查。930777B是应用可见backing store计数，不是heap。
+- A1 22050Hz包内和46424B完整WAV写入/读回/播放已实测。append139316B、position79236B的失败可由整backing写入模型精确复现，不能判定API不支持；0.4.1精确缓冲修复后两项46424B全字节一致且听感确认，见[第六轮](device-results/2026-10-05-probe-0.4.1.md)。容量上限、长句和文件队列未测。
+- 文件播放已证，不依赖原始 PCM 播放 API；核心 PCM 分片、有界运行时和文件队列仍待实现。
+- 真实 DSP RTF、峰值 heap、连续文件间隙、完整取消/前后台、多轮稳定性、Files 分区容量均未证。无法测量的字段须记“不可测/未知”。
+- ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
+- maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
+- 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
+- M15 中文/其他语言首发延期，未完成；稳定性单列 S1，不再占用 M15 编号。
 
 ## 下一步
 
-0. **完整路线与压缩后恢复点见 [正式开发计划](DEVELOPMENT_PLAN.md)**——执行顺序：解包 `design/espeak-ng-js-stage-designs.zip` 每阶段 DESIGN.md → D1 真实数据装载管线（probe 0.4.0）→ M00a trace 插桩（可并行）。
+1. A1：按钮9/10短WAV增量写入、头回填、读回/播放/清理和听感已通过，无需重复本轮选项；后续在M11/M12验证真正PCM生成、队列与容量。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
+2. 继续完善数据动态依赖，不能因候选驻留成功宣称产品数据闭包完成。
+3. M10：继续实现wave/spect/formant PCM；pause/marker首个PCM切片已闭合。原Generate队列调度仍须在有界运行时中验收，不能提前标完整phonemizer完成。
+4. M02→M10：clause、字典、翻译、音素状态与完整 phonemizer；继续M10合成。
+5. M08 VM→M07→M09→M10：按真实状态依赖实现 DSP；首个正确切片即做 P1 性能观察，完整链路再做全面基准。
+6. M11→M12→M13→M14/S1：有界运行时、设备播放、数据裁剪、优化与稳定性；M16 维护演练纳入首发，M15 延期。
 
-1. 真实数据装载管线（装载层实现 + probe 0.4.0 合流）：上游 en-us 词典/音素数据以 .txt 扩展名打包，设备端 readArrayBuffer 全量/分页装载并逐字节 hash 校验；实测真实规模（可能 >256KiB）、启动耗时与峰值内存。
-2. 核验上游源码观察点与调用顺序，补内部 Trace Oracle、音素表数据加载和阶段映射。
-3. 推进 phonemizer 与代表性 DSP 重放切片；真实 DSP 基准保留首次等待、分片测量窗口与总耗时，定位 77ms 异常片。设备实测前不承诺实时可用。
-
-不以文档存在代替功能完成；不以 harness 自检代替 C/JS 兼容通过。
+不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。
