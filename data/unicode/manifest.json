@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "unicodeVersion": "11.0.0",
+  "codePointCount": 1114112,
+  "layout": "range triples inclusive start/end/(category<<12|flags); sorted codepoint/mapping pairs",
+  "flags": [
+    "iswAlnum",
+    "iswAlpha",
+    "iswBlank",
+    "iswCntrl",
+    "iswDigit",
+    "iswGraph",
+    "iswLower",
+    "iswPrint",
+    "iswPunct",
+    "iswSpace",
+    "iswUpper",
+    "iswXdigit"
+  ],
+  "invalidCategory": 5,
+  "sourceFiles": [
+    {
+      "path": "src/ucd-tools/src/include/ucd/ucd.h",
+      "sha256": "4d0f07930384e2a57a4abeb433bd3fef35a5904b2c5ce6ad6ee30f72ddfde67f"
+    },
+    {
+      "path": "src/ucd-tools/src/categories.c",
+      "sha256": "edd26047254c98d65936f1f4237feb2389acb1cce3733a2b693e1a9b9f333880"
+    },
+    {
+      "path": "src/ucd-tools/src/proplist.c",
+      "sha256": "6a96e07b90ca58a9b807f6cf8ece6294f4864ba017e99c0574aeb235b0d41053"
+    },
+    {
+      "path": "src/ucd-tools/src/ctype.c",
+      "sha256": "7c3a160f572c19d9b429aff57cfec9eb526b47535bcb96f747fadc5601d6ba93"
+    },
+    {
+      "path": "src/ucd-tools/src/case.c",
+      "sha256": "04622da7360518fb8feb94a0e53e75f281b2a530690626a142d9522767bda3d7"
+    }
+  ],
+  "sourceFingerprint": "e97233c138266d09d701a260da813c307b234ff9f20e8a17ab6e41fe04cccb83",
+  "exporterSha256": "09fb6d0075fb836e0622ae1a7da1b5683118fb3d1c8631052ed79650824b00ad",
+  "tableExportSha256": "9f57f55b359a04efeb31d949b74479fa3b1d693dece06f05511022f577bae251",
+  "rangeCount": 3847,
+  "lowerCount": 1383,
+  "upperCount": 1400,
+  "typedArrayBytes": 68428,
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt and licenses/espeak-ng/COPYING.UCD.txt",
+  "moduleSha256": "115ed779069a71740b6fc90150c464165772551a122a75fd1b6f2d44252410c7"
+}
