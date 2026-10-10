@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "initialized-en-us-prosody-profile",
+  "voice": "en-us",
+  "source": {
+    "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+    "files": ["src/libespeak-ng/tr_languages.c", "src/libespeak-ng/setlengths.c", "src/libespeak-ng/voices.c"]
+  },
+  "profile": {
+    "stressAmps": [17, 16, 19, 19, 19, 19, 21, 19],
+    "stressLengths": [140, 120, 190, 170, 0, 0, 255, 300],
+    "lenSpeeds": [87, 80, 78],
+    "maxAmpEoc": 19,
+    "max_lengthmod": 500,
+    "lengthen_tonic": 20,
+    "long_stop": 100,
+    "stress_flags": 8,
+    "word_gap": 0
+  },
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}
