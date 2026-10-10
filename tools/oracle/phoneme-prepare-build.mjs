@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';import path from 'node:path';
+import {root,referenceBuild,fileHash} from './trace-build-info.mjs';
+import {phonemePrepareRoot,phonemePrepareSource,phonemePrepareObserved,phonemePrepareBinary,phonemePrepareInputs} from './phoneme-prepare-build-info.mjs';
+const inputs=phonemePrepareInputs(),original=readFileSync(path.join(root,'upstream/espeak-ng/src/libespeak-ng/phonemelist.c'),'utf8');
+const anchor='\tfor (j = 0; insert_ph || ((j < n_ph_list3) && (ix < N_PHONEME_LIST-3)); j++) {';
+assert.equal(original.split(anchor).length,2,'Unique original pre-InterpretPhoneme boundary');
+const observed=original.replace(anchor,'\tprepare_capture(ph_list3, n_ph_list3 + 2, end_sourceix);\n\treturn; // boundary oracle stops before the first VM operation\n'+anchor);
+mkdirSync(phonemePrepareRoot,{recursive:true});writeFileSync(phonemePrepareObserved,observed);
+const compiler=readFileSync(path.join(referenceBuild,'CMakeCache.txt'),'utf8').match(/^CMAKE_C_COMPILER:FILEPATH=(.+)$/m)?.[1];assert(compiler);
+const args=['-std=c11','-O2','-Wall','-Wextra','-fwrapv','-DLIBESPEAK_NG_EXPORT=1','-DJSPEAK_PREPARE_SOURCE='+JSON.stringify(phonemePrepareObserved),...['src/include','src/include/compat','src/ucd-tools/src/include','src/libespeak-ng'].map(name=>'-I'+path.join(root,'upstream/espeak-ng',name)),'-I'+path.join(referenceBuild,'src/libespeak-ng/include'),phonemePrepareSource,...inputs.libraries.map(row=>path.join(referenceBuild,row.path)),'-lm','-o',phonemePrepareBinary];
+execFileSync(compiler,args,{timeout:60000,stdio:'inherit'});assert.deepEqual(phonemePrepareInputs(),inputs);
+writeFileSync(path.join(phonemePrepareRoot,'build-stamp.json'),JSON.stringify({schemaVersion:1,inputs,compiler,compilerVersion:execFileSync(compiler,['--version'],{encoding:'utf8'}).split('\n')[0],compileArguments:args,binarySha256:fileHash(phonemePrepareBinary),observedSourceSha256:fileHash(phonemePrepareObserved),boundary:'Original MakePhonemeList after substitution/wordstress and initial pause pointer, before its first InterpretPhoneme loop'},null,2)+'\n');console.log('Built original MakePhonemeList pre-VM boundary oracle.');

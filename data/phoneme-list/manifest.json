@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "initialized-en-us-phoneme-list",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "reference": {
+    "fingerprint": "28f57e0915b27608abe8d365b11caf903e934082e02fde2baf4e96d690287385"
+  },
+  "inputs": {
+    "reference": {
+      "executableSha256": "492bdd6492372340ba6f2085cf89bb0eb1fc5df62d01b8a2c6bed7a935b6a9ba",
+      "cmakeCacheSha256": "9927eb9e21b4d8af50478437e7273ca1309118ec6987e48db9641e44f5debd95",
+      "configHeaderSha256": "843dbcbc1ecd51d5f5285db3cf82d5778151e46a115248736844aad5bad26d69",
+      "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880"
+    },
+    "helperSourceSha256": "77400f7a54af5a4d100341d5798732f9093262fc4600058060c6c834edecd628",
+    "builderSha256": "91cb1e75667ad0edce299c69551c8db3eb64187c631200176c000b0ee5f0f77e",
+    "libraries": [
+      {
+        "path": "src/libespeak-ng/libespeak-ng.a",
+        "sha256": "99b81da9a0779691ba11b407913a13122c90a2f27c415e52835997d1afdb687c"
+      },
+      {
+        "path": "src/ucd-tools/libucd.a",
+        "sha256": "052fdf0ca8a94d6581de519f33cd565df3d18a7e7ecf01d3e28c4136f28f0207"
+      }
+    ],
+    "sources": [
+      {
+        "path": "src/libespeak-ng/translate.c",
+        "sha256": "826204021a151e037f3bcb3ea7d8250c685165b05be5b1e692d4409426c88eb8"
+      },
+      {
+        "path": "src/libespeak-ng/translate.h",
+        "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+      },
+      {
+        "path": "src/libespeak-ng/synthesize.h",
+        "sha256": "8bf54a9feeb16201a91f7840fa06470e1bc2adbb6eacc4a4d160feb8a6754774"
+      },
+      {
+        "path": "src/libespeak-ng/phoneme.h",
+        "sha256": "9f9d91ed07885b227cce551cdbad9cf620c2945d44a8e90edf910af9646d7d75"
+      }
+    ],
+    "dictionarySha256": "621c5825c37cff4510ab4e9a724314587995c78bcb86675d21964fe896ad2d4c",
+    "phontabSha256": "7462b1d693c4f46b394308052a3ab9f824ff03e1a6ab2ca434fdde0283f4b444"
+  },
+  "generatorSha256": "b5a9ebdc8c8614a1c707180560c056165ddaa2bf2435fcd01aaa969a90ca1a90",
+  "profile": {
+    "voice": "en-us",
+    "translatorName": 25966,
+    "phonemeTable": 80,
+    "capacity": 1000,
+    "embeddedCapacity": 250,
+    "phonemeCapacity": 200
+  },
+  "constants": {
+    "phonPAUSE": 9,
+    "phonPAUSE_SHORT": 10,
+    "phonPAUSE_NOLINK": 11,
+    "phonPAUSE_VSHORT": 23,
+    "phonPAUSE_CLAUSE": 27,
+    "phonCAPITAL": 18,
+    "phonSWITCH": 21,
+    "phonSYLLABIC": 20,
+    "phonLENGTHEN": 12,
+    "phonEND_WORD": 15,
+    "phonX1": 22,
+    "SFLAG_EMBEDDED": 2,
+    "SFLAG_SYLLABLE": 4,
+    "SFLAG_LENGTHEN": 8,
+    "SFLAG_DICTIONARY": 16,
+    "SFLAG_PROMOTE_STRESS": 64,
+    "EMBED_P": 1
+  },
+  "moduleSha256": "3020932e876e5cfc8c7094cdacbb87c41f7f9e0c140704bafaf460ce84145756",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}
