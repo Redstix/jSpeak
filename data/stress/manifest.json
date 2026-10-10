@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "initialized-en-us-word-stress-profile",
+  "reference": {
+    "fingerprint": "0596b86408e1ed04f86f6c7f03e42eed2d5db13c9665fe3f7392ca96730c0f0c",
+    "phontabSha256": "7462b1d693c4f46b394308052a3ab9f824ff03e1a6ab2ca434fdde0283f4b444"
+  },
+  "profile": {
+    "voice": "en-us",
+    "translatorName": 25966,
+    "phonemeTable": 80,
+    "stressRule": 0,
+    "stressFlags": 8,
+    "unstressedWord1": 1,
+    "unstressedWord2": 3,
+    "vowelPause": 0,
+    "itLengthen": 0,
+    "wordPhonemeCapacity": 200
+  },
+  "moduleSha256": "dba3231b61ccc3f659a9d9fcd515c4f78b9540c35fae95d47c47b77a1047f60b",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}

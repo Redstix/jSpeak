@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "initialized-en-us-word-ending",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "reference": {
+    "fingerprint": "9f5a84330133d687385de4e3232f2daa738efecab13325a5e12f131b22d2b1ab"
+  },
+  "inputs": {
+    "reference": {
+      "executableSha256": "492bdd6492372340ba6f2085cf89bb0eb1fc5df62d01b8a2c6bed7a935b6a9ba",
+      "cmakeCacheSha256": "9927eb9e21b4d8af50478437e7273ca1309118ec6987e48db9641e44f5debd95",
+      "configHeaderSha256": "843dbcbc1ecd51d5f5285db3cf82d5778151e46a115248736844aad5bad26d69",
+      "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880"
+    },
+    "helperSourceSha256": "fc0a76fe83d7160b3f9c6850b8863c8198bf63916f454ad3c573877eee421f4b",
+    "libraries": [
+      {
+        "path": "src/libespeak-ng/libespeak-ng.a",
+        "sha256": "99b81da9a0779691ba11b407913a13122c90a2f27c415e52835997d1afdb687c"
+      },
+      {
+        "path": "src/ucd-tools/libucd.a",
+        "sha256": "052fdf0ca8a94d6581de519f33cd565df3d18a7e7ecf01d3e28c4136f28f0207"
+      }
+    ],
+    "sources": [
+      {
+        "path": "src/libespeak-ng/dictionary.c",
+        "sha256": "f4e7080b60eb8f61b6d9b80caa8d34632af74178035fc3420afa17e6d1857603"
+      },
+      {
+        "path": "src/libespeak-ng/translate.h",
+        "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+      },
+      {
+        "path": "src/libespeak-ng/tr_languages.c",
+        "sha256": "b166378ae39efdd4e998e00fa70410168627efb61268bcc1dc6d832bef207aa1"
+      }
+    ]
+  },
+  "generatorSha256": "92054285b6e36a3b432868467cf469bf9209de00125682a9365e32bc79354a22",
+  "profile": {
+    "voice": "en-us",
+    "translatorName": 25966,
+    "suffixAddE": 101,
+    "wordCopyCapacity": 160,
+    "endingCapacity": 50
+  },
+  "exceptions": [
+    "ion"
+  ],
+  "additions": [
+    "c",
+    "rs",
+    "ir",
+    "ur",
+    "ath",
+    "ns",
+    "u",
+    "spong",
+    "rang",
+    "larg"
+  ],
+  "moduleSha256": "2999987afc873ffa187e2bd710aad9dbb1a1d0282daec978dcdc411be96cf682",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}

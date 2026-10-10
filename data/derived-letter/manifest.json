@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "original-static-derived-letter-table",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "reference": {
+    "executableSha256": "492bdd6492372340ba6f2085cf89bb0eb1fc5df62d01b8a2c6bed7a935b6a9ba",
+    "cmakeCacheSha256": "9927eb9e21b4d8af50478437e7273ca1309118ec6987e48db9641e44f5debd95",
+    "configHeaderSha256": "843dbcbc1ecd51d5f5285db3cf82d5778151e46a115248736844aad5bad26d69",
+    "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880"
+  },
+  "sources": [
+    {
+      "path": "src/libespeak-ng/numbers.c",
+      "sha256": "0163bc13ee6c60ec0c264d8693b72423357aafeef34f9b070b405f2486f908af"
+    },
+    {
+      "path": "src/libespeak-ng/numbers.h",
+      "sha256": "d1a299d01d670f188e69738d5a2a0227165fb757351f69edce7a5ec9d850bc79"
+    },
+    {
+      "path": "src/libespeak-ng/translateword.c",
+      "sha256": "d39c0cab3005f16d3d4c6ddfcd64a06eb91c3c4a2a7486181d3097bb5a5a9240"
+    },
+    {
+      "path": "src/libespeak-ng/translateword.h",
+      "sha256": "e84f81feac1fc24d0c2d538a4ca070fcd2364061b259709f0dac528d467856f1"
+    },
+    {
+      "path": "src/libespeak-ng/dictionary.c",
+      "sha256": "f4e7080b60eb8f61b6d9b80caa8d34632af74178035fc3420afa17e6d1857603"
+    },
+    {
+      "path": "src/libespeak-ng/translate.h",
+      "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+    },
+    {
+      "path": "src/libespeak-ng/phoneme.h",
+      "sha256": "9f9d91ed07885b227cce551cdbad9cf620c2945d44a8e90edf910af9646d7d75"
+    }
+  ],
+  "libraries": [
+    {
+      "path": "src/libespeak-ng/libespeak-ng.a",
+      "sha256": "99b81da9a0779691ba11b407913a13122c90a2f27c415e52835997d1afdb687c"
+    },
+    {
+      "path": "src/ucd-tools/libucd.a",
+      "sha256": "052fdf0ca8a94d6581de519f33cd565df3d18a7e7ecf01d3e28c4136f28f0207"
+    }
+  ],
+  "exporterSha256": "dad01a8ab70df62ea3cef7249c5d221e823255c475d5ac023acb3dcd58414b01",
+  "generatorSha256": "62b3a7a1c502ba985d89122c905c80c06ce389e0967b2b4bdf9ec1086b313c37",
+  "entries": 62,
+  "exportSha256": "79a5e881d69a4a24760c99fece3d075cc1a5fe072ef0deb1db298ecb1dc46a2e",
+  "moduleSha256": "6c71ebba48bddabd7e15ab165d71c2e658fab3b104c54ebe8316a08f9cd63793",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "original-en-us-number-profile",
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "reference": {
+    "executableSha256": "492bdd6492372340ba6f2085cf89bb0eb1fc5df62d01b8a2c6bed7a935b6a9ba",
+    "cmakeCacheSha256": "9927eb9e21b4d8af50478437e7273ca1309118ec6987e48db9641e44f5debd95",
+    "configHeaderSha256": "843dbcbc1ecd51d5f5285db3cf82d5778151e46a115248736844aad5bad26d69",
+    "dataFingerprint": "dacdc888cf04c84d65facb0c9c6d36ad9ca875a1c85bb4cfef9958effc54e880"
+  },
+  "sources": [
+    {
+      "path": "src/libespeak-ng/numbers.c",
+      "sha256": "0163bc13ee6c60ec0c264d8693b72423357aafeef34f9b070b405f2486f908af"
+    },
+    {
+      "path": "src/libespeak-ng/numbers.h",
+      "sha256": "d1a299d01d670f188e69738d5a2a0227165fb757351f69edce7a5ec9d850bc79"
+    },
+    {
+      "path": "src/libespeak-ng/dictionary.c",
+      "sha256": "f4e7080b60eb8f61b6d9b80caa8d34632af74178035fc3420afa17e6d1857603"
+    },
+    {
+      "path": "src/libespeak-ng/translate.h",
+      "sha256": "07ab41478bec1bc4947b248f1f05138770aa6e7ed4de261db374160d16bcd11e"
+    },
+    {
+      "path": "src/libespeak-ng/phoneme.h",
+      "sha256": "9f9d91ed07885b227cce551cdbad9cf620c2945d44a8e90edf910af9646d7d75"
+    }
+  ],
+  "libraries": [
+    {
+      "path": "src/libespeak-ng/libespeak-ng.a",
+      "sha256": "99b81da9a0779691ba11b407913a13122c90a2f27c415e52835997d1afdb687c"
+    },
+    {
+      "path": "src/ucd-tools/libucd.a",
+      "sha256": "052fdf0ca8a94d6581de519f33cd565df3d18a7e7ecf01d3e28c4136f28f0207"
+    }
+  ],
+  "exporterSha256": "f8c7f17f4c3694af258d55e7d2cfac0419e76500833f1d8bb97611944703ca24",
+  "generatorSha256": "e3c54b0ab15c83ac34af4811ddfb26f022e392e5da04d60e19fd28b296555999",
+  "profile": {
+    "voice": "en-us",
+    "translatorName": 25966,
+    "dictCondition": 72,
+    "phonemeTable": 80,
+    "numbers": 16779328,
+    "numbers2": 0,
+    "minRoman": 2,
+    "maxRoman": 49,
+    "thousandsSeparator": 44,
+    "decimalSeparator": 46,
+    "romanSuffix": "",
+    "ordinalIndicator": null
+  },
+  "exportSha256": "5b1a956b41303ec7439a443ba2b3bc26c027c5761b18d2a92ea8f8abab85cce9",
+  "moduleSha256": "c4044c2b0a14e60203ebc95f75797da8f689d2c287da2513a1621490adf3f125",
+  "license": "GPL-3.0-or-later; licenses/espeak-ng/COPYING.txt"
+}

@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { isSuperscript, nonAsciiNumber } from '../../src/core/derived-letter.js';
+import { DERIVED_LETTERS } from '../../data/derived-letter/table.js';
+import { root, config, fileHash, sha256 } from './trace-build-info.mjs';
+import { derivedBinary, validateDerivedBuild } from './derived-build-info.mjs';
+const build=validateDerivedBuild();
+const points=[...Array.from({length:65536},(_,i)=>i),65536,0x10428,0x10ffff,0x110000,0x7fffffff,0x80000000,0xffffffff,-1,-2147483648];
+const input=Buffer.alloc((points.length+1)*4);input.writeUInt32LE(points.length);points.forEach((cp,i)=>input.writeUInt32LE(cp>>>0,(i+1)*4));
+const run=()=>execFileSync(derivedBinary,[],{input,timeout:30000,maxBuffer:4*1024*1024});
+const original=run();assert.deepEqual(original,run());const c=JSON.parse(original);
+assert.deepEqual(points.map(cp=>[isSuperscript(cp),nonAsciiNumber(cp)]),c);
+assert.equal(DERIVED_LETTERS.length,126);assert.equal(c.filter(row=>row[1]>=0).length,160);assert.equal(c.filter(row=>row[0]).length,62);
+for(const value of [NaN,0.5,-2147483649,4294967296,null,'2'])assert.throws(()=>isSuperscript(value));
+const manifest=JSON.parse(readFileSync(path.join(root,'data/derived-letter/manifest.json')));
+assert.equal(fileHash(path.join(root,'data/derived-letter/table.js')),manifest.moduleSha256);
+mkdirSync(path.join(root,'artifacts'),{recursive:true});const out=mkdtempSync(path.join(root,'artifacts/oracle-derived-'));
+const report={schemaVersion:1,kind:'original-IsSuperscript-NonAsciiNumber-vs-JS',status:'passed',upstreamCommit:config.commit,helperFingerprint:build.fingerprint,
+ comparisons:points.length,matchedEntries:62,nonAsciiMatches:160,fullBMP:true,freshRuns:2,responseSha256:sha256(original),sources:['src/core/derived-letter.js','data/derived-letter/table.js'].map(name=>({path:name,sha256:fileHash(path.join(root,name))}))};
+writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log('PASS '+points.length+' IsSuperscript comparisons; '+path.join(out,'report.json'));

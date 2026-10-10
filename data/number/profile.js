@@ -1,0 +1,4 @@
+// Generated original initialized en-us number profile and constants. GPL-3.0-or-later.
+// See licenses/espeak-ng/COPYING.txt.
+export var NUMBER_PROFILE = Object.freeze({"voice":"en-us","translatorName":25966,"dictCondition":72,"phonemeTable":80,"numbers":16779328,"numbers2":0,"minRoman":2,"maxRoman":49,"thousandsSeparator":44,"decimalSeparator":46,"romanSuffix":"","ordinalIndicator":null});
+export var NUMBER_CONSTANTS = Object.freeze({"NUM_1900":2048,"NUM_HUNDRED_AND":64,"NUM_ROMAN":16777216,"NUM_ALLOW_SPACE":4096,"NUM_ORDINAL_DOT":65536,"NUM_NOPAUSE":131072,"NUM_ROMAN_CAPITALS":33554432,"NUM_ROMAN_AFTER":67108864,"NUM_ROMAN_ORDINAL":134217728,"SAYAS_DIGITS1":193,"FLAG_INDIVIDUAL_DIGITS":524288,"FLAG_ORDINAL":32768,"FLAG_MULTIPLE_SPACES":262144,"FLAG_NOSPACE":256,"FLAG_HYPHEN_AFTER":16384,"FLAG_ALL_UPPER":1,"FLAG_HAS_DOT":65536,"FLAG_SKIPWORDS":128,"FLAG_FOUND":2147483648,"FLAG_SUFX":4,"phonEND_WORD":15,"phonPAUSE_SHORT":10,"phonPAUSE_NOLINK":11,"phonSWITCH":21});
