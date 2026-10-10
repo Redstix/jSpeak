@@ -54,3 +54,14 @@
 | `CTRL_EMBEDDED`、`LookupCharName` 可达依赖 | 目前明确 `READ_CLAUSE_UNSUPPORTED`，reason分别为 `embedded-command`、`punctuation-name-dictionary`；出错会话不可继续 | 所有例外保留case ID与已匹配prefix，不把例外计为exact；补齐依赖前完整M02不完成 |
 
 运行期无系统API、Node或宿主Unicode依赖。profile外SSML、punctuation/capital选项、非默认lineLength、skip/end-position均未实现，不能通过options启用。原始阶段文档保持不变。接口/分配见 [READ_CLAUSE](READ_CLAUSE.md)，证据见 [M02.1验收](build-results/2026-10-05-m02-clause.md)。
+
+## M10 Wavegen 映射
+
+| 固定 C 行为 | JS 实现 / 状态与数据 | 观察与回归 |
+|---|---|---|
+| `wavegen.c:WavegenInit/GetAmplitude/WavegenSetEcho/SetPitchFormants` | `src/core/wave-generator.js` 初始化、embedded defaults、echo ring 与 voice formant 状态；`src/core/wavegen-data.js` 保存固定表 | en-us voice由命令观察器导出；非零echo无语料覆盖 |
+| `wavegen.c:PeaksToHarmspect/AdvanceParameters/Wavegen/SetSynth` | 保留C整数wrap、double插值、Flutter、roughness、glottal reduction、AGC、WAVE2混合和formant状态 | 67输入、99 clause、15449命令、6344247样本C/JS exact |
+| `wavegen.c:PlaySilence/PlayWave/WavegenFill2` | pause、marker、wave、WAVE2、spect/spect2、amplitude、pitch、embedded和bounded resume；未用命令显式unsupported | 1/7/64/1323/4096样本分块拼接一致 |
+| `common.c:espeak_rand`；`wavegen.c:InitBreath/SetBreath/ApplyBreath` | 确定性LCG与breath resonator已实现 | 当前en-us breath为零，该分支无C/JS exact覆盖 |
+
+命令观察器把 `N_WCMDQ` 扩为4096以捕获完整逻辑计划；原170项运行时队列调度仍是M11范围。接口见 [WAVE_GENERATOR](WAVE_GENERATOR.md)，证据见 [M10完整验收](build-results/2026-10-10-m10-wave-full.md)。

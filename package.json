@@ -38,6 +38,7 @@
   "test:generate-events": "node tools/compare/generate-events.mjs artifacts/oracle-clause-word2-2pOOA5",
   "test:wave-generator:pause": "node tools/compare/wave-generator-pause.mjs",
   "test:wave-generator:wave": "node tools/compare/wave-generator-wave.mjs",
+  "test:wave-generator:full": "node --max-old-space-size=1024 tools/compare/wave-generator-full.mjs",
   "oracle:wave-sample:build": "node tools/oracle/wave-sample-build.mjs",
     "text:build": "node tools/build-text/build.mjs",
     "test:text": "node tools/build-text/verify.mjs",

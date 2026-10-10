@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-05
 
-执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact。尚无完整JS合成器。
+执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact。完整文本→PCM运行时集成仍有界队列与M11待完成。
 
 ## 已完成
 
@@ -31,7 +31,7 @@
 - M08音素VM已完成固定en-us可达切片：8200组C/JS exact，含phase 1 mutation、phase 2声音指令、条件与邻居查询；409项clean库重复对照。报告 `artifacts/phoneme-interpreter-MrD6Ky/report.json`。这不代表M07 prosody或M09 DSP完成。
 - M07 prosody已完成固定en-us切片：CalcPitches与CalcLengths在99个真实CLI子句、3430行上两阶段全exact；显式注入真实embedded list，避免C全局初始化残留。见[PROSODY](PROSODY.md)与[M07记录](build-results/2026-10-06-m07-prosody.md)。
 - M09 Generate高层事件已完成固定en-us逻辑切片：99个真实CLI子句、19994个高层合成事件全exact。观察器为暴露完整逻辑计划将`N_WCMDQ`放大为4096；原170项有界队列的满队resume和消费调度尚未验收。见[GENERATE_EVENTS](GENERATE_EVENTS.md)与[M09记录](build-results/2026-10-06-m09-generate-events.md)。
-- M10 Wavegen前两个PCM切片已完成：pause/marker在2个纯空白整句、308样本上与原C WAV完全一致；20条独立PlayWave命令、26694样本逐点exact。voiced/spect/WAVE2仍显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10记录](build-results/2026-10-06-m10-wave-pause.md)。
+- M10固定en-us波形后端已完成：67个非空输入、99 clause、15449条Generate命令、6344247个样本与C Oracle默认PCM逐点exact；1/7/64/1323/4096样本分块拼接一致，PCM工作缓冲不随输出时长增长。SPECT/SPECT2/WAVE/WAVE2/PAUSE/AMPLITUDE/PITCH/EMBEDDED/MARKER均已覆盖，profile外后端显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10完整验收](build-results/2026-10-10-m10-wave-full.md)。
 
 ## 设备事实汇总
 
@@ -50,12 +50,12 @@
 
 ## 未完成与限制
 
-- M00 已覆盖 decode、clause、word table、部分韵律前音素；分类原语已有独立参考，但仍缺集成规则选择/词重音、完整内部状态、VM/DSP和完整回归语料。无效 UTF-8 固定 seed 差分与有界缩减基础设施已补，不能推广为完整前端或损坏二进制数据 fuzz。上游本平台已注册19项CTest通过；目标JS语言回归尚未导入为完整差分。
-- M01原语和内部utf8_in/utf8_in2已分别按原函数移植验证；其他输入编码尚未覆盖。尚无完整JS phonemizer、VM或合成器。
+- M00 已覆盖 decode、clause、word table、部分韵律前音素；分类原语已有独立参考。M08 VM与M10 DSP函数级切片已闭合，但仍缺完整内部状态、有界运行时调度和更大规模完整回归语料。无效 UTF-8 固定 seed 差分与有界缩减基础设施已补，不能推广为完整前端或损坏二进制数据 fuzz。上游本平台已注册19项CTest通过；目标JS语言回归尚未导入为完整差分。
+- M01原语和内部utf8_in/utf8_in2已分别按原函数移植验证；其他输入编码尚未覆盖。固定en-us前端到PCM各函数切片已通过，但完整文本→PCM运行时尚未集成。
 - M02直接断句、词切分、替换表和embedded已实现，省略号可通过注入真实词典服务处理；未提供依赖仍明确拒绝。标点公告当前语料已闭合；完整word翻译后的词计数和多clause翻译集成已在pre-MakePhonemeList边界验收。记录的原C越界不能算JS兼容成功。
 - D1 当前候选字节装载/驻留已实测；完整reader初始化、最终依赖闭包及容量上限未验证。候选至少缺 hy/ko/ar/hi 动态词典；assemble总耗时19764ms、hash14344ms、maxHashCopy685ms，保留性能调查。930777B是应用可见backing store计数，不是heap。
 - A1 22050Hz包内和46424B完整WAV写入/读回/播放已实测。append139316B、position79236B的失败可由整backing写入模型精确复现，不能判定API不支持；0.4.1精确缓冲修复后两项46424B全字节一致且听感确认，见[第六轮](device-results/2026-10-05-probe-0.4.1.md)。容量上限、长句和文件队列未测。
-- 文件播放已证，不依赖原始 PCM 播放 API；核心 PCM 分片、有界运行时和文件队列仍待实现。
+- 文件播放已证，不依赖原始 PCM 播放 API；核心 PCM 分片和resume已实现，但有界运行时调度、真实流水线RTF和文件队列仍待实现。
 - 真实 DSP RTF、峰值 heap、连续文件间隙、完整取消/前后台、多轮稳定性、Files 分区容量均未证。无法测量的字段须记“不可测/未知”。
 - ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
 - maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
@@ -66,9 +66,8 @@
 
 1. A1：按钮9/10短WAV增量写入、头回填、读回/播放/清理和听感已通过，无需重复本轮选项；后续在M11/M12验证真正PCM生成、队列与容量。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 继续完善数据动态依赖，不能因候选驻留成功宣称产品数据闭包完成。
-3. M10：继续实现wave/spect/formant PCM；pause/marker首个PCM切片已闭合。原Generate队列调度仍须在有界运行时中验收，不能提前标完整phonemizer完成。
-4. M02→M10：clause、字典、翻译、音素状态与完整 phonemizer；继续M10合成。
-5. M08 VM→M07→M09→M10：按真实状态依赖实现 DSP；首个正确切片即做 P1 性能观察，完整链路再做全面基准。
-6. M11→M12→M13→M14/S1：有界运行时、设备播放、数据裁剪、优化与稳定性；M16 维护演练纳入首发，M15 延期。
+3. M11：实现原170项命令队列的有界满队resume、消费调度、PCM缓冲所有权、背压、取消和容量上限；M10观察队列4096仅用于捕获逻辑命令，不是运行时结论。
+4. M12：连接数据、完整文本→PCM合成、文件写入与真机播放；补齐P1性能观察。
+5. M13→M14/S1：数据裁剪、优化与稳定性；M16 维护演练纳入首发，M15 延期。
 
 不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。

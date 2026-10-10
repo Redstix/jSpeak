@@ -22,6 +22,9 @@ extern intptr_t wcmdq[N_WCMDQ][4];
 extern int wcmdq_head;
 extern int wcmdq_tail;
 
+static frame_t observed_frames[65536];
+static int observed_frame_count = 0;
+
 static void status(espeak_ng_STATUS value) { if (value != ENS_OK) exit(70); }
 
 static void emit_profile(void) {
@@ -37,18 +40,61 @@ static void emit_integer(intptr_t value) {
 
 static void emit_frame(intptr_t value) {
     if (value == 0) { fputs("null", stdout); return; }
-    if (wavefile_data != NULL && value >= (intptr_t)wavefile_data &&
-        value < (intptr_t)(wavefile_data + 600104)) {
-        printf("{\"phondataOffset\":%lld}", (long long)(value - (intptr_t)wavefile_data));
-        return;
+    const frame_t *frame = (const frame_t *)(uintptr_t)value;
+    for (int ix = 0; ix < observed_frame_count; ix++) {
+        if (memcmp(&observed_frames[ix], frame, sizeof(frame_t)) == 0) {
+            printf("{\"frameIndex\":%d}", ix);
+            return;
+        }
     }
-    unsigned long long hash = 1469598103934665603ULL;
-    const unsigned char *bytes = (const unsigned char *)(uintptr_t)value;
-    for (size_t i = 0; i < sizeof(frame_t); i++) {
-        hash ^= bytes[i];
-        hash *= 1099511628211ULL;
+    if (observed_frame_count >= 65536) exit(71);
+    observed_frames[observed_frame_count++] = *frame;
+    printf("{\"frameIndex\":%d}", observed_frame_count - 1);
+}
+
+static void emit_frame_value(const frame_t *frame) {
+    printf("{\"frflags\":%d,\"ffreq\":[", (int)frame->frflags);
+    for (int ix = 0; ix < 7; ix++) printf("%s%d", ix ? "," : "", (int)frame->ffreq[ix]);
+    fputs("],\"length\":", stdout);
+    printf("%u,\"rms\":%u,\"fheight\":[", frame->length, frame->rms);
+    for (int ix = 0; ix < 8; ix++) printf("%s%u", ix ? "," : "", frame->fheight[ix]);
+    fputs("],\"fwidth\":[", stdout);
+    for (int ix = 0; ix < 6; ix++) printf("%s%u", ix ? "," : "", frame->fwidth[ix]);
+    fputs("],\"fright\":[", stdout);
+    for (int ix = 0; ix < 3; ix++) printf("%s%u", ix ? "," : "", frame->fright[ix]);
+    fputs("]}", stdout);
+}
+
+static void emit_voice(void) {
+    const voice_t *value = voice;
+    printf("{\"pitchBase\":%d,\"pitchRange\":%d,\"flutter\":%d,\"roughness\":%d,"
+           "\"echoDelay\":%d,\"echoAmp\":%d,\"nHarmonicPeaks\":%d,\"peakShape\":%d,"
+           "\"voicing\":%d,\"formantFactor\":%d,\"consonantAmp\":%d,\"consonantAmpv\":%d,"
+           "\"sampleRate\":%d",
+           value->pitch_base, value->pitch_range, value->flutter, value->roughness,
+           value->echo_delay, value->echo_amp, value->n_harmonic_peaks, value->peak_shape,
+           value->voicing, value->formant_factor, value->consonant_amp, value->consonant_ampv,
+           value->samplerate);
+    const char *names[] = { "freq", "height", "width", "freqadd", "freq2", "height2", "breath", "breathw" };
+    for (int field = 0; field < 8; field++) {
+        printf(",\"%s\":[", names[field]);
+        for (int ix = 0; ix < N_PEAKS; ix++) {
+            int number;
+            if (field == 0) number = value->freq[ix];
+            else if (field == 1) number = value->height[ix];
+            else if (field == 2) number = value->width[ix];
+            else if (field == 3) number = value->freqadd[ix];
+            else if (field == 4) number = value->freq2[ix];
+            else if (field == 5) number = value->height2[ix];
+            else if (field == 6) number = value->breath[ix];
+            else number = value->breathw[ix];
+            printf("%s%d", ix ? "," : "", number);
+        }
+        putchar(']');
     }
-    printf("{\"frameHash\":\"%016llx\"}", hash);
+    fputs(",\"toneAdjust\":[", stdout);
+    for (int ix = 0; ix < N_TONE_ADJUST; ix++) printf("%s%u", ix ? "," : "", value->tone_adjust[ix]);
+    fputs("]}", stdout);
 }
 
 static void emit_envelope(intptr_t value) {
@@ -97,10 +143,16 @@ static void emit_command(int index) {
 }
 
 static void emit_commands(void) {
+    observed_frame_count = 0;
     printf("{\"count\":%d,\"items\":[", wcmdq_tail);
     for (int i = 0; i < wcmdq_tail; i++) {
         if (i) putchar(',');
         emit_command(i);
+    }
+    fputs("],\"frames\":[", stdout);
+    for (int i = 0; i < observed_frame_count; i++) {
+        if (i) putchar(',');
+        emit_frame_value(&observed_frames[i]);
     }
     fputs("]}", stdout);
 }
@@ -114,6 +166,8 @@ int main(int argc, char **argv) {
 
     fputs("{\"profile\":", stdout);
     emit_profile();
+    fputs(",\"voiceState\":", stdout);
+    emit_voice();
     fputs(",\"results\":[", stdout);
 
     unsigned count, start_sentence, tone, embedded_count, row = 0;

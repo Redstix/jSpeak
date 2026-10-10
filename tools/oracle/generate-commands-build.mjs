@@ -7,15 +7,27 @@ import { generateCommandsBinary, generateCommandsInputs, generateCommandsRoot, g
 
 const inputs = generateCommandsInputs();
 mkdirSync(generateCommandsRoot, { recursive: true });
+const observedHeader = path.join(generateCommandsRoot, 'synthesize-observed.h');
+const observedSynthesizeSource = path.join(generateCommandsRoot, 'synthesize-observed.c');
+const observedWavegenSource = path.join(generateCommandsRoot, 'wavegen-observed.c');
+const originalHeader = readFileSync(path.join(root, 'upstream/espeak-ng/src/libespeak-ng/synthesize.h'), 'utf8');
+const patchedHeader = originalHeader.replace('#define N_WCMDQ   170', '#define N_WCMDQ   4096');
+assert.notEqual(patchedHeader, originalHeader, 'Unique N_WCMDQ header anchor');
+writeFileSync(observedHeader, patchedHeader);
+writeFileSync(observedSynthesizeSource, readFileSync(path.join(root, 'upstream/espeak-ng/src/libespeak-ng/synthesize.c')));
+writeFileSync(observedWavegenSource, readFileSync(path.join(root, 'upstream/espeak-ng/src/libespeak-ng/wavegen.c')));
 const compiler = readFileSync(path.join(referenceBuild, 'CMakeCache.txt'), 'utf8')
   .match(/^CMAKE_C_COMPILER:FILEPATH=(.+)$/m)?.[1];
 assert(compiler, 'Missing C compiler from reference build');
 const args = [
-  '-std=c11', '-O2', '-Wall', '-Wextra', '-fwrapv', '-DLIBESPEAK_NG_EXPORT=1',
+  '-std=gnu11', '-O2', '-Wall', '-Wextra', '-fwrapv', '-D_GNU_SOURCE', '-DLIBESPEAK_NG_EXPORT=1',
+  '-include', observedHeader,
   ...['src/include', 'src/include/compat', 'src/ucd-tools/src/include', 'src/libespeak-ng']
     .map(name => '-I' + path.join(root, 'upstream/espeak-ng', name)),
   '-I' + path.join(referenceBuild, 'src/libespeak-ng/include'),
   generateCommandsSource,
+  observedSynthesizeSource,
+  observedWavegenSource,
   ...inputs.libraries.map(row => path.join(referenceBuild, row.path)),
   '-lm', '-o', generateCommandsBinary,
 ];

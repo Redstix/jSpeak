@@ -29,8 +29,34 @@ test('pause generation resumes across bounded PCM chunks', () => {
   assert.equal(second.resume, false);
 });
 
-test('unsupported wave commands fail explicitly', () => {
+test('synthesized PCM is identical for different bounded chunk sizes', () => {
+  const commands = [
+    { type: 5, a: 123 },
+    { type: 10, a: 0 }
+  ];
+  const expected = createWaveGenerator().synthesize(commands, { chunkSize: 4096 }).samples;
+  for (const chunkSize of [1, 7, 64, 1323]) {
+    assert.deepEqual(createWaveGenerator().synthesize(commands, { chunkSize }).samples, expected);
+  }
+});
+
+test('PCM working buffers do not grow with output duration', () => {
   const generator = createWaveGenerator();
-  assert.throws(() => generator.synthesize([{ type: 9, a: 0 }]),
-    error => error.code === 'WAVE_GENERATOR_UNSUPPORTED' && error.reason === 'command-9');
+  const before = generator.bufferProfile();
+  const output = new Int16Array(64);
+  for (let produced = 0; produced < 100000;) {
+    const result = generator.fill([{ type: 5, a: 100000 }, { type: 10, a: 0 }], output);
+    produced += result.produced;
+    if (result.finished) break;
+  }
+  assert.deepEqual(generator.bufferProfile(), before);
+  assert.equal(generator.bufferProfile().outputLengthDependent, false);
+});
+
+test('profile-unused wave commands fail explicitly', () => {
+  const generator = createWaveGenerator();
+  for (const type of [1, 2, 11, 13, 14, 15, 16]) {
+    assert.throws(() => generator.synthesize([{ type, a: 0 }]),
+      error => error.code === 'WAVE_GENERATOR_UNSUPPORTED' && error.reason === 'command-' + type);
+  }
 });
