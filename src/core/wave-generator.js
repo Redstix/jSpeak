@@ -475,24 +475,26 @@ export function createWaveGenerator(options) {
     if (samplecount === samplecountStart) return;
     let peakIx;
     for (peakIx = 0; peakIx <= wvoice.nHarmonicPeaks; peakIx++) {
-      peaks[peakIx].freq1 += peaks[peakIx].freqInc;
-      peaks[peakIx].freq = toInt32(peaks[peakIx].freq1);
-      peaks[peakIx].height1 += peaks[peakIx].heightInc;
-      peaks[peakIx].height = Math.max(0, toInt32(peaks[peakIx].height1));
-      peaks[peakIx].left1 += peaks[peakIx].leftInc;
-      peaks[peakIx].left = toInt32(peaks[peakIx].left1);
+      const peak = peaks[peakIx];
+      peak.freq1 += peak.freqInc;
+      peak.freq = toInt32(peak.freq1);
+      peak.height1 += peak.heightInc;
+      peak.height = Math.max(0, toInt32(peak.height1));
+      peak.left1 += peak.leftInc;
+      peak.left = toInt32(peak.left1);
       if (peakIx < 3) {
-        peaks[peakIx].right1 += peaks[peakIx].rightInc;
-        peaks[peakIx].right = toInt32(peaks[peakIx].right1);
-      } else peaks[peakIx].right = peaks[peakIx].left;
+        peak.right1 += peak.rightInc;
+        peak.right = toInt32(peak.right1);
+      } else peak.right = peak.left;
     }
     for (; peakIx < 8; peakIx++) {
+      const peak = peaks[peakIx];
       if (peakIx < 7) {
-        peaks[peakIx].freq1 += peaks[peakIx].freqInc;
-        peaks[peakIx].freq = toInt32(peaks[peakIx].freq1);
+        peak.freq1 += peak.freqInc;
+        peak.freq = toInt32(peak.freq1);
       }
-      peaks[peakIx].height1 += peaks[peakIx].heightInc;
-      peaks[peakIx].height = Math.max(0, toInt32(peaks[peakIx].height1));
+      peak.height1 += peak.heightInc;
+      peak.height = Math.max(0, toInt32(peak.height1));
     }
   }
 
@@ -577,6 +579,11 @@ export function createWaveGenerator(options) {
   function playSpect(length, modulation, frame1, frame2, output, outputOffset) {
     if (!wvoice) unsupported('voice-state');
     if (!resume) setSynth(length, modulation, frame1, frame2);
+    const sin = sinTable;
+    const spectrumPool = hspect;
+    const peakHarmonicTable = peakHarmonic;
+    const peakHeightTable = peakHeight;
+    const echoSamples = echoBuffer;
     let produced = 0;
     for (;;) {
       if (endWave === 0 && samplecount === nsamples) {
@@ -600,8 +607,9 @@ export function createWaveGenerator(options) {
         maxh2 = peaksToHarmspect(wdata.pitch << 4, hspect[hswitch], 1);
         setBreath();
       } else if ((samplecount & 7) === 0) {
+        const spectrum = spectrumPool[harmspectIndex];
         for (let h = 1; h < C.N_LOWHARM && h <= maxh2 && h <= maxh; h++) {
-          hspect[harmspectIndex][h] = add32(hspect[harmspectIndex][h], harmInc[h]);
+          spectrum[h] = add32(spectrum[h], harmInc[h]);
         }
         if (agc < 256) agc++;
       }
@@ -653,20 +661,22 @@ export function createWaveGenerator(options) {
       let total = 0;
       cbytes = add32(cbytes, 1);
       if (cbytes >= 0 && cbytes < wavemultMax) {
+        const spectrum = spectrumPool[harmspectIndex];
         for (let pk = wvoice.nHarmonicPeaks + 1; pk < C.N_PEAKS; pk++) {
-          const theta = mul32(peakHarmonic[pk], waveph) & 0xffff;
-          total = add32(total, mul32(sinTable[theta >> 5], peakHeight[pk]));
+          const theta = mul32(peakHarmonicTable[pk], waveph) & 0xffff;
+          total = add32(total, mul32(sin[theta >> 5], peakHeightTable[pk]));
         }
         total = mul32(Math.trunc(total / hfFactor), waveMult[cbytes]);
       }
+      const spectrum = spectrumPool[harmspectIndex];
       let theta = waveph;
       let h = 1;
       for (; h <= hSwitchSign; h++) {
-        total = add32(total, mul32(sinTable[theta >> 5], hspect[harmspectIndex][h]));
+        total = add32(total, mul32(sin[theta >> 5], spectrum[h]));
         theta = (theta + waveph) & 0xffff;
       }
       while (h <= maxh) {
-        total = add32(total, -mul32(sinTable[theta >> 5], hspect[harmspectIndex][h]));
+        total = add32(total, -mul32(sin[theta >> 5], spectrum[h]));
         theta = (theta + waveph) & 0xffff;
         h++;
       }
@@ -679,7 +689,7 @@ export function createWaveGenerator(options) {
         z2 = Math.trunc(Math.imul(z2, wdata.mixWaveAmp) / 32);
       }
       let z1 = add32(z2, ((total >> 8) * amplitude2 >> 13));
-      const echo = echoBuffer[echoTail++] * echoAmplitude;
+      const echo = echoSamples[echoTail++] * echoAmplitude;
       z1 = add32(z1, echo >> 8);
       if (echoTail >= C.N_ECHO_BUF) echoTail = 0;
       let z = mul32(z1, agc) >> 8;
@@ -690,7 +700,7 @@ export function createWaveGenerator(options) {
         z = mul32(z1, agc) >> 8;
       }
       output[outputOffset + produced++] = toPcm16(z);
-      echoBuffer[echoHead++] = toPcm16(z);
+      echoSamples[echoHead++] = toPcm16(z);
       if (echoHead >= C.N_ECHO_BUF) echoHead = 0;
       if (outputOffset + produced >= output.length) {
         resume = true;

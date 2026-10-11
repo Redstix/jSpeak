@@ -37,6 +37,7 @@
 
 
 - M15数据/profile候选已完成：`cmn`与`en-us`并存且可独立选择；独立原始数据包2,295,161B、`cmn_list/cmn_rules/cmn_emoji`源输入锁、29例exact phoneme/PCM差分、tone token与1例动态en词典缺口均记录。复现命令为`npm run language:cmn:build/verify`，见[Mandarin](MANDARIN_SUPPORT.md)。该结果只证明C数据依赖候选，不证明QuickJS/Vela运行时。
+- `work/vela-performance`已完成零输出变化的共享Wavegen初步优化：固定M10语料Node median耗时从7523.686ms降至7065.694ms（-6.09%），67/67 PCM仍exact；帧对象减少7个冗余字段。该结果不代表Vela/QuickJS，见[性能优化](PERFORMANCE_OPTIMIZATION.md)。
 
 ## 设备事实汇总
 
@@ -65,12 +66,12 @@
 - ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
 - maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
-- M15剩余工作：cmn JS前端（ideograph/tone tokenizer、`CalcPitches_Tone`等）、C/JS exact、Vela集成和用户听感验收；M13/M14性能优化仍未开始。稳定性单列S1。
+- M15剩余工作：cmn JS前端（ideograph/tone tokenizer、`CalcPitches_Tone`等）、C/JS exact、Vela集成和用户听感验收。M13数据裁剪未做；M14仅有Node侧共享层优化，Vela RTF/heap/maxSlice未测。稳定性单列S1。
 
 ## 下一步
 
 1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
-3. M13→M14/S1：数据裁剪、性能优化与稳定性；M15完整JS/真机验收继续单列跟踪；M16维护演练纳入首发。
+3. M13→M14/S1：数据裁剪、Vela实测性能优化与稳定性；M15完整JS/真机验收继续单列跟踪；M16维护演练纳入首发。
 
 不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。

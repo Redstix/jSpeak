@@ -39,6 +39,7 @@
   "test:wave-generator:pause": "node tools/compare/wave-generator-pause.mjs",
   "test:wave-generator:wave": "node tools/compare/wave-generator-wave.mjs",
     "test:wave-generator:full": "node --max-old-space-size=1024 tools/compare/wave-generator-full.mjs",
+    "benchmark:wave-generator": "node tools/compare/wave-generator-benchmark.mjs",
     "benchmark:synthesis-runtime": "node tools/compare/synthesis-runtime-benchmark.mjs",
   "oracle:wave-sample:build": "node tools/oracle/wave-sample-build.mjs",
     "text:build": "node tools/build-text/build.mjs",
