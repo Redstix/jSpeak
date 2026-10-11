@@ -27,6 +27,8 @@ npm run oracle:build  # 固定版本的 C 参考程序
 npm run test:oracle   # 22 例 C 自身重复性检查，不是 C/JS 兼容测试
 npm run language:cmn:build  # 生成并差分验证独立 cmn 原始数据包
 npm run language:cmn:verify # 校验 cmn 包、源输入、固定语料和参考 WAV
+npm run oracle:cmn-tone:build # 构建独立 cmn CalcPitches_Tone C 参考
+npm run test:cmn-tone          # 13 例 Mandarin tone pitch C/JS exact 差分
 npm run oracle:trace:build  # 隔离构建内部前端观察补丁，保留原参考构建
 npm run test:oracle:trace   # 50 例 clean/instrumented 对照与上游 CTest
 npm run oracle:unicode:build # 在已有双构建上链接独立 C Unicode 参考

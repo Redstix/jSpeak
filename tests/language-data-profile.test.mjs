@@ -10,7 +10,7 @@ test('language data profiles coexist and can be selected independently', () => {
   assert.deepEqual(cmn.runtimeFiles, ['cmn_dict', 'intonations', 'lang/sit/cmn', 'phondata', 'phonindex', 'phontab']);
   assert.deepEqual(cmn.sourceInputs, ['dictsource/cmn_list', 'dictsource/cmn_rules', 'dictsource/cmn_emoji']);
   assert.equal(cmn.jsRuntimeStatus, 'unsupported');
-  assert.ok(cmn.unsupportedReason.includes('cmn frontend/tone runtime'));
+  assert.ok(cmn.unsupportedReason.includes('full cmn frontend is not implemented'));
   assert.equal(Object.keys(LANGUAGE_DATA_PROFILES).length, 2);
 });
 

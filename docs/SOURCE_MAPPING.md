@@ -1,6 +1,6 @@
 # Source mapping
 
-固定上游：`ba90c8e9f440ad544f674a790bb5f53878b6ffc5`。当前映射覆盖 **C Oracle 插桩 → JS trace 工具**、**M01 Unicode** 与 **M02.1 固定 profile 的 ReadClause 切片**；发音核心尚未移植。
+固定上游：`ba90c8e9f440ad544f674a790bb5f53878b6ffc5`。当前映射覆盖 **C Oracle 插桩 → JS trace 工具**、**M01 Unicode**、**M02.1 固定 profile 的 ReadClause 切片**、**M10 Wavegen** 与 **M15 cmn tone 切片**；完整发音/文本核心尚未移植。
 
 | 上游路径/符号 | 已核验行为与状态 | 当前 JS/工具入口 | 观察/回归 |
 |---|---|---|---|
@@ -65,3 +65,12 @@
 | `common.c:espeak_rand`；`wavegen.c:InitBreath/SetBreath/ApplyBreath` | 确定性LCG与breath resonator已实现 | 当前en-us breath为零，该分支无C/JS exact覆盖 |
 
 命令观察器把 `N_WCMDQ` 扩为4096以捕获完整逻辑计划；原170项运行时队列调度仍是M11范围。接口见 [WAVE_GENERATOR](WAVE_GENERATOR.md)，证据见 [M10完整验收](build-results/2026-10-10-m10-wave-full.md)。
+
+## M15 cmn tone 映射
+
+| 固定 C 行为 | JS 实现 / 状态与数据 | 观察与回归 |
+|---|---|---|
+| `intonation.c:CalcPitches_Tone` 的 Mandarin 分支 | `src/core/calc-pitches-tone.js`；`src/core/calc-pitches.js` 通过 `toneLanguage=1` 分派；`data/cmn/prosody-profile.js` 锁 translator/table/profile | 独立C Oracle输出 MakePhonemeList before/pitches；13例、76音素、stress/tone/pitch字段全exact |
+| Mandarin tone promotion 与 sandhi | 保留无调号promotion、214/51/55相邻sandhi、tone-5 level changes、句末55/15 stress调整和tone phoneme start/end pitch | `tools/compare/cmn-tone.mjs`；构造 `PHONEME_LIST2` 覆盖 reviewed组合，不宣称完整文本前端 |
+
+C 参考：`tools/oracle/cmn-tone-oracle.c`；构建入口 `tools/oracle/cmn-tone-build.mjs`。输入为显式 `PHONEME_LIST2` 行，未覆盖任意文本、损坏输入或全部 tone 组合。

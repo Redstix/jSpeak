@@ -2,6 +2,8 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2007 Jonathan Duddington;
 // 2015-2016 Reece H. Dunn. See licenses/espeak-ng/COPYING.txt.
 import { PROSODY_TUNES } from '../../data/prosody/tunes.js';
+import { CMN_PROSODY_PROFILE } from '../../data/cmn/prosody-profile.js';
+import { createTonePitchCalculator } from './calc-pitches-tone.js';
 
 export var PITCH_CONSTANTS = Object.freeze({
   PITCHfall: 0, PITCHrise: 2, PITCHfrise: 4, PITCHfrise2: 6,
@@ -179,6 +181,7 @@ export function createPitchCalculator(selectedTable, options) {
   if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   const opts = options || {};
   if (opts.intonationGroup !== undefined && opts.intonationGroup !== 0) throw new Error('Unsupported intonation group');
+  if (opts.toneLanguage === 1) return createTonePitchCalculator(selectedTable, { ...CMN_PROSODY_PROFILE, ...opts });
   if (opts.toneLanguage !== undefined && opts.toneLanguage !== 0) throw new Error('Unsupported tone language');
   const optionToneFlags = opts.optionToneFlags === undefined ? 0 : opts.optionToneFlags;
   if (!Number.isInteger(optionToneFlags) || optionToneFlags < 0 || optionToneFlags > 0xffffffff) throw new RangeError('Invalid option tone flags');

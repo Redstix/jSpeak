@@ -19,7 +19,7 @@
 
 使用 ArrayBuffer、Uint8Array、Int16Array、Uint32Array、DataView、Math.imul、字节序和有符号运算时须验证具体行为。BigInt、Promise、TextEncoder/TextDecoder 不默认成为核心依赖；新引入的内建操作先核验目标能力。随机状态遵从 C Oracle，不以 Math.random 代替。
 
-语言数据profile必须显式选择：`en-us`仍是partial-M12 JS路径；`cmn`仅完成C数据/差分候选，`jsRuntimeStatus=unsupported`。不得把cmn数据包中的Oracle WAV可播放解释为QuickJS中文合成可用。
+语言数据profile必须显式选择：`en-us`仍是partial-M12 JS路径；`cmn`完成C数据/差分候选和`CalcPitches_Tone`函数级切片，`jsRuntimeStatus=unsupported`。不得把cmn数据包中的Oracle WAV可播放或tone函数切片解释为QuickJS中文合成可用。
 
 ## 数据装载契约
 

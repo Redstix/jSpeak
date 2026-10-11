@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-11
 
-执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile阶段已落地：30例C差分29 exact、1例显式unsupported；cmn JS前端和真机中文出声未完成。
+执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile与CalcPitches_Tone切片已落地：数据差分29 exact/1 unsupported，tone差分13/13 exact；cmn完整JS前端和真机中文出声未完成。
 
 ## 已完成
 
@@ -37,6 +37,7 @@
 
 
 - M15数据/profile候选已完成：`cmn`与`en-us`并存且可独立选择；独立原始数据包2,295,161B、`cmn_list/cmn_rules/cmn_emoji`源输入锁、29例exact phoneme/PCM差分、tone token与1例动态en词典缺口均记录。复现命令为`npm run language:cmn:build/verify`，见[Mandarin](MANDARIN_SUPPORT.md)。该结果只证明C数据依赖候选，不证明QuickJS/Vela运行时。
+- M15 tone prosody切片已完成：`CalcPitches_Tone` Mandarin分支移植并通过独立C Oracle 13/13 exact（76音素、stress/tone/pitch字段全一致）。复现命令为`npm run oracle:cmn-tone:build && npm run test:cmn-tone`。
 
 ## 设备事实汇总
 
@@ -65,7 +66,7 @@
 - ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
 - maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
-- M15剩余工作：cmn JS前端（ideograph/tone tokenizer、`CalcPitches_Tone`等）、C/JS exact、Vela集成和用户听感验收；M13/M14性能优化仍未开始。稳定性单列S1。
+- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13/M14性能优化仍未开始。稳定性单列S1。
 
 ## 下一步
 

@@ -9,6 +9,7 @@
 - `cmn_list`、`cmn_rules`、`cmn_emoji` 是源输入锁；对应已编译运行时依赖是未修改的 `cmn_dict`。源输入不打包为另一种运行时格式。
 - 设备资源格式仍遵循既有契约：所有包内二进制文件以 `.txt` 包装扩展名保存，内容保持上游原始字节，不压缩、不改写。
 - 固定语料 30 例：29 例 full C data 与 standalone cmn 候选 phoneme/WAV exact；1 例显式分类 unsupported。
+- `CalcPitches_Tone` JS 切片已完成：13 例、76 个 MakePhonemeList 后音素、`stresslevel/tonePh/pitch1/pitch2` 全 exact。
 - 参考 WAV 为 `PCM16 / mono / 22050Hz`，文本 `你好，世界。`，65,688 字节、32,822 样本，SHA256 `47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1`。
 
 ## 启用与复现
@@ -16,6 +17,8 @@
 ```sh
 npm run language:cmn:build
 npm run language:cmn:verify
+npm run oracle:cmn-tone:build
+npm run test:cmn-tone
 ```
 
 生成物位于忽略目录 `artifacts/cmn-language-pack/`：
@@ -78,9 +81,19 @@ const enUs = selectLanguageDataProfile('en-us'); // jsRuntimeStatus === 'partial
 
 `[[en-us]] hello` 在完整 Oracle 数据中会动态加载 `en_dict`。独立 cmn profile 刻意不包含英文词典，因此候选产生缺文件诊断、phoneme 和 PCM 均不同。该路径分类为 `unsupported-dynamic-en-us-dictionary`，不是失败被忽略，也不是通过。
 
+## Tone prosody C/JS differential
+
+`src/core/calc-pitches-tone.js` 移植固定上游 `CalcPitches_Tone` 的 Mandarin 分支，并从 `src/core/calc-pitches.js` 通过 `toneLanguage=1` 显式分派。C 参考在 `MakePhonemeList` 后输出 before/pitches 两个阶段，JS 使用 before 阶段重放，只比较 `CalcPitches_Tone` 实际写入的四个字段。
+
+固定用例覆盖：无调号 promotion、35、55、15、51、214（6 例）；214+214、214+55、51+51 sandhi（3 例）；55+11、53+11、214+11 的 tone-5 level changes（3 例）；三音节连续（1 例）。
+
+结果：13/13 exact，76 个音素，0 unsupported。请求 SHA256：`8c0a8500e0b0aa449af668784124fd33f195ae28f2db8c46ba67442b0956e2ae`。
+
+这不是完整文本前端：输入是构造过的 `PHONEME_LIST2` 行，不证明 cmn ideograph/tone tokenizer、TranslateClause 或最终 Vela PCM。
+
 ## 未完成与验收边界
 
-- **cmn JS 前端未移植**：`TranslateClause`、cmn ideograph/tone tokenizer、`CalcPitches_Tone`、MakePhonemeList/Generate/Wavegen 的 cmn 参数化均未验收。
+- **cmn JS 前端未完成**：`CalcPitches_Tone` 切片已 exact；`TranslateClause`、cmn ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen 参数化与端到端集成均未验收。
 - **en-us M12 前置未闭合**：现有 JS 文本→命令路径在英文上与 C PCM 不 exact，因此不能把共享 DSP/运行时结果推广为 cmn。
 - **真机中文出声未验证**：本页没有 Vela/QuickJS 中文合成 APK/RPK，也没有设备听感记录。任何真机中文出声结论都必须由用户确认。
 - **M13/M14 未做**：未裁剪 cmn 数据、未测资源占用和速度、未验证音质损失较低的优化。

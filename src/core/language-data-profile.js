@@ -17,7 +17,7 @@ export const LANGUAGE_DATA_PROFILES = Object.freeze({
     runtimeFiles: Object.freeze(['cmn_dict', 'intonations', 'lang/sit/cmn', 'phondata', 'phonindex', 'phontab']),
     sourceInputs: Object.freeze(['dictsource/cmn_list', 'dictsource/cmn_rules', 'dictsource/cmn_emoji']),
     jsRuntimeStatus: 'unsupported',
-    unsupportedReason: 'M12 en-us JS text→command integration is not C-exact and the cmn frontend/tone runtime has not been ported',
+    unsupportedReason: 'M12 en-us JS text→command integration is not C-exact and only the CalcPitches_Tone cmn slice is accepted; the full cmn frontend is not implemented',
     explicitUnsupportedInputs: Object.freeze(['[[en-us]] language switch without en_dict in the standalone cmn data profile']),
     closureComplete: false
   })
