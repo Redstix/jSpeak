@@ -121,7 +121,7 @@ export function createTtsSession(file, audio, assets, dictionaryManifest, callba
   return {
     start: function () {
       token++
-      row('身份', '0.5.0 ' + buildStamp + '；text=' + TEST_TEXT)
+      row('身份', '0.5.1-A ' + buildStamp + '；text=' + TEST_TEXT)
       row('流程', 'LOADING packaged data')
       loadFile(0)
     },
