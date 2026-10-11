@@ -10,8 +10,10 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const config = JSON.parse(readFileSync(path.join(root, 'upstream.json'), 'utf8'));
-const version = JSON.parse(readFileSync(path.join(root, 'apps/vela-probe/package.json'), 'utf8')).version;
-const output = path.join(root, 'artifacts', 'probe-' + version + '-sources');
+const packagePath = process.argv[2] || 'apps/vela-probe';
+const packageManifest = JSON.parse(readFileSync(path.join(root, packagePath, 'package.json'), 'utf8'));
+const version = packageManifest.version;
+const output = path.join(root, 'artifacts', path.basename(packagePath) + '-' + version + '-sources');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const git = (...args) => execFileSync('git', args, { cwd: root, maxBuffer: 256 * 1024 * 1024 });
 const source = path.join(root, 'upstream/espeak-ng');
@@ -49,7 +51,7 @@ for (const entry of sourceManifest) {
   if (hash(readFileSync(path.join(root, entry.path))) !== entry.sha256) throw new Error('Source changed during archive: ' + entry.path);
 }
 writeFileSync(path.join(output, 'manifest.json'), JSON.stringify({
-  schemaVersion: 1, probeVersion: version, upstreamCommit: config.commit,
+  schemaVersion: 1, packagePath, version, upstreamCommit: config.commit,
   projectHead: git('rev-parse', 'HEAD').toString().trim(),
   projectDirty: git('status', '--porcelain').length > 0,
   sourceFingerprint: hash(JSON.stringify(sourceManifest)), archives, files: sourceManifest,

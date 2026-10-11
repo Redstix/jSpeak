@@ -1,0 +1,12 @@
+{
+  "package": "org.jspeak.tts",
+  "name": "jSpeak TTS测试",
+  "versionName": "0.5.0",
+  "versionCode": 7,
+  "minPlatformVersion": 1200,
+  "icon": "/common/logo.png",
+  "deviceTypeList": ["watch"],
+  "features": [{"name":"system.audio"},{"name":"system.file"}],
+  "config": {"logLevel":"log","designWidth":432},
+  "router": {"entry":"pages/index","pages":{"pages/index":{"component":"index"}}}
+}

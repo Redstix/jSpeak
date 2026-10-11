@@ -12,3 +12,7 @@ apps/vela-probe/user_result/
 apps/vela-probe/src/build-stamp.js
 apps/vela-probe/src/data-assets.js
 apps/vela-probe/src/common/espeak/
+apps/vela-tts/node_modules
+apps/vela-tts/src/build-stamp.js
+apps/vela-tts/src/data-assets.js
+apps/vela-tts/src/common/espeak/

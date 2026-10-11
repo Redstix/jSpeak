@@ -1,0 +1,7 @@
+eSpeak NG data and reference speech used by jSpeak probe 0.4.0
+Source: https://github.com/espeak-ng/espeak-ng
+Commit: ba90c8e9f440ad544f674a790bb5f53878b6ffc5
+The GPLv3 and other upstream license texts accompany this resource.
+File-specific notices are preserved in the complete upstream source archive.
+Build corresponding source companions with npm run probe:source.
+See THIRD_PARTY_NOTICES.md and docs/DATA_PACK.md in the project sources.

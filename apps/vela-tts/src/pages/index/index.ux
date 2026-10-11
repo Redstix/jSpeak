@@ -1,0 +1,79 @@
+<template>
+  <div class="page">
+    <text class="title">jSpeak TTS 0.5.0</text>
+    <scroll class="content" scroll-y="true">
+      <div class="body">
+        <text class="note">固定英文：Hello world.</text>
+        <input class="button" type="button" value="合成 / 播放" onclick="synthesize" />
+        <input class="button" type="button" value="停止 / 清理" onclick="stopAll" />
+        <text class="note">结果在下方；请记录是否听到英文。</text>
+        <div class="result" for="item in results">
+          <text class="label">{{item.label}}</text>
+          <text class="value">{{item.value}}</text>
+        </div>
+      </div>
+    </scroll>
+  </div>
+</template>
+<script>
+import audio from '@system.audio'
+import file from '@system.file'
+import { DATA_ASSETS } from '../../data-assets'
+import { BUILD_STAMP } from '../../build-stamp'
+import { DICTIONARY_MANIFEST } from '../../dictionary-manifest'
+import { createTtsSession } from '../../tts-service'
+
+export default {
+  private: {
+    results: [
+      { label: '版本', value: 'READY 0.5.0 ' + BUILD_STAMP },
+      { label: '数据', value: '候选 ' + DATA_ASSETS.totalDataBytes + 'B；闭包未完成' },
+      { label: '流程', value: 'WAITING' }
+    ]
+  },
+  onInit() {
+    this.runId = 0
+    this.session = null
+    this.destroyed = false
+  },
+  onHide() { this.stopAll() },
+  onDestroy() { this.stopAll(); this.destroyed = true },
+  setResult(label, value) {
+    if (this.destroyed) return
+    var rows = this.results.slice(); var found = false
+    for (var i = 0; i < rows.length; i++) if (rows[i].label === label) { rows[i] = { label: label, value: String(value) }; found = true; break }
+    if (!found) rows.push({ label: label, value: String(value) })
+    this.results = rows
+  },
+  stopAll() {
+    this.runId++
+    try { audio.onplay = null; audio.onended = null; audio.onerror = null; audio.stop() } catch (error) {}
+    if (this.session) this.session.cancel()
+    this.session = null
+    this.setResult('流程', 'STOPPED')
+  },
+  synthesize() {
+    this.stopAll()
+    var token = ++this.runId
+    this.session = createTtsSession(file, audio, DATA_ASSETS, DICTIONARY_MANIFEST, {
+      row: (name, value) => { if (token === this.runId) this.setResult(name, value) },
+      listening: () => { if (token === this.runId) this.setResult('听感', 'UNVERIFIED；请记录是否清晰英文') },
+      done: (message) => { if (token === this.runId) this.setResult('流程', message) },
+      fail: (message) => { if (token === this.runId) this.setResult('流程', 'FAIL ' + message) },
+      shouldContinue: () => token === this.runId && !this.destroyed
+    }, BUILD_STAMP)
+    this.session.start()
+  }
+}
+</script>
+<style>
+.page { flex-direction: column; background-color: #101010; padding: 28px 24px; }
+.title { color: #ffffff; font-size: 25px; text-align: center; margin-bottom: 12px; }
+.content { flex-grow: 1; flex-direction: column; }
+.body { flex-direction: column; }
+.note { color: #cccccc; font-size: 19px; margin-bottom: 12px; }
+.button { height: 52px; margin-bottom: 10px; background-color: #303030; color: #ffffff; font-size: 21px; }
+.result { flex-direction: column; margin-bottom: 16px; }
+.label { color: #bbbbbb; font-size: 19px; }
+.value { color: #ffffff; font-size: 20px; }
+</style>

@@ -1,4 +1,4 @@
-# Implementation status — 2026-10-05
+# Implementation status — 2026-10-11
 
 执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。
 
@@ -33,6 +33,7 @@
 - M09 Generate高层事件已完成固定en-us逻辑切片：99个真实CLI子句、19994个高层合成事件全exact。观察器为暴露完整逻辑计划将`N_WCMDQ`放大为4096；原170项有界队列的满队resume和消费调度尚未验收。见[GENERATE_EVENTS](GENERATE_EVENTS.md)与[M09记录](build-results/2026-10-06-m09-generate-events.md)。
 - M10固定en-us波形后端已完成：67个非空输入、99 clause、15449条Generate命令、6344247个样本与C Oracle默认PCM逐点exact；1/7/64/1323/4096样本分块拼接一致，PCM工作缓冲不随输出时长增长。SPECT/SPECT2/WAVE/WAVE2/PAUSE/AMPLITUDE/PITCH/EMBEDDED/MARKER均已覆盖，profile外后端显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10完整验收](build-results/2026-10-10-m10-wave-full.md)。
 - M11有界命令→PCM运行时已完成：170命令窗口、4096样本chunk、最多4块在途PCM（32768B）、输入65536B/code point 16384/clause 256/中间命令100000显式上限；慢消费backpressure、1秒/30秒、5001命令长流、取消重启、资源回收和100次会话无串扰通过。接入运行时后M10全量仍67/67 exact。见[M11验收](build-results/2026-10-10-m11-bounded-runtime.md)。
+- M12 Vela适配已产出可安装测试RPK：固定`Hello world.`连接候选数据、JS文本→命令→有界PCM→完整WAV、internal写读和`@system.audio`播放，页面生命周期有取消入口。RPK静态/解包校验通过，见[0.5.0构建记录](build-results/2026-10-11-tts-0.5.0.md)。但集成文本→命令路径未达到C/JS PCM exact（JS 22809样本，C 23190样本，首个差异1384），真机播放、听感、前后台与清理待用户验收；M12不可标记完成。
 
 ## 设备事实汇总
 
@@ -65,7 +66,7 @@
 
 ## 下一步
 
-1. M12：连接数据、完整文本→PCM合成、文件写入与真机播放；补齐P1性能观察。A1按钮9/10短WAV写入/播放/清理已通过，无需重复本轮选项；D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
+1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 继续完善数据动态依赖，不能因候选驻留成功宣称产品数据闭包完成。
 3. M13→M14/S1：数据裁剪、优化与稳定性；M16 维护演练纳入首发，M15 延期。
 
