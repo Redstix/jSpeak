@@ -34,6 +34,7 @@
 - M10固定en-us波形后端已完成：67个非空输入、99 clause、15449条Generate命令、6344247个样本与C Oracle默认PCM逐点exact；1/7/64/1323/4096样本分块拼接一致，PCM工作缓冲不随输出时长增长。SPECT/SPECT2/WAVE/WAVE2/PAUSE/AMPLITUDE/PITCH/EMBEDDED/MARKER均已覆盖，profile外后端显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10完整验收](build-results/2026-10-10-m10-wave-full.md)。
 - M11有界命令→PCM运行时已完成：170命令窗口、4096样本chunk、最多4块在途PCM（32768B）、输入65536B/code point 16384/clause 256/中间命令100000显式上限；慢消费backpressure、1秒/30秒、5001命令长流、取消重启、资源回收和100次会话无串扰通过。接入运行时后M10全量仍67/67 exact。见[M11验收](build-results/2026-10-10-m11-bounded-runtime.md)。
 - M12 Vela适配已产出可安装测试RPK：固定`Hello world.`连接候选数据、JS文本→命令→有界PCM→完整WAV、internal写读和`@system.audio`播放，页面生命周期有取消入口。RPK静态/解包校验通过，见[0.5.0构建记录](build-results/2026-10-11-tts-0.5.0.md)。但集成文本→命令路径未达到C/JS PCM exact（JS 22809样本，C 23190样本，首个差异1384），真机播放、听感、前后台与清理待用户验收；M12不可标记完成。
+- M14启动资源优化已在`perf/quickjs-vela-optimization`产出0.5.1 A/B/C三档：A保留完整JS合成并把启动解析从0.5.0的1731654B降至361297B；B/C为11025Hz/5512Hz预计算播放档，启动解析约4.7KB且无JS文件I/O。`npm test` 278/278、数据校验与三档静态校验通过，见[0.5.1 profiles构建](build-results/2026-10-11-tts-0.5.1-profiles.md)。源码审计证实0.5.0启动不读数据，898009B只在点击后读取；启动闪退根因仍待真机A/B判定，M14/S1完整验收未完成。
 
 
 - M15数据/profile候选已完成：`cmn`与`en-us`并存且可独立选择；独立原始数据包2,295,161B、`cmn_list/cmn_rules/cmn_emoji`源输入锁、29例exact phoneme/PCM差分、tone token与1例动态en词典缺口均记录。复现命令为`npm run language:cmn:build/verify`，见[Mandarin](MANDARIN_SUPPORT.md)。该结果只证明C数据依赖候选，不证明QuickJS/Vela运行时。
@@ -66,12 +67,12 @@
 - ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
 - maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
-- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13/M14性能优化仍未开始。稳定性单列S1。
+- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13数据最小化未开始；M14仅完成本轮启动解析/打包减法，设备启动、heap、RTF、S1稳定性与最终预算未验收。
 
 ## 下一步
 
 1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
-3. M13→M14/S1：数据裁剪、性能优化与稳定性；M15完整JS/真机验收继续单列跟踪；M16维护演练纳入首发。
+3. 用户真机验收0.5.1 A/B/C启动与听感；随后继续M13数据最小化、M14设备资源/RTF证据与S1稳定性。M15完整JS/真机验收继续单列跟踪；M16维护演练纳入首发。
 
 不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。

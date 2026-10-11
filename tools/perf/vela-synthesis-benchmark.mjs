@@ -21,7 +21,7 @@ function readData(name) {
   return new Uint8Array(readFileSync(path.join(DATA_ROOT, name)));
 }
 
-export async function benchmarkVelaSynthesis({ runs = 7 } = {}) {
+export async function benchmarkVelaSynthesis({ runs = 25 } = {}) {
   const dictionaryManifest = JSON.parse(readFileSync(new URL('../../data/dictionary/manifest.json', import.meta.url)));
   const inputs = {
     dictionaryBytes: readData('en_dict.txt'),
@@ -62,9 +62,15 @@ export async function benchmarkVelaSynthesis({ runs = 7 } = {}) {
     },
     benchmark: {
       runs,
+      initializationMinMs: Number(Math.min(...initializationTimes).toFixed(3)),
       initializationMedianMs: Number(median(initializationTimes).toFixed(3)),
+      initializationMaxMs: Number(Math.max(...initializationTimes).toFixed(3)),
+      synthesisMinMs: Number(Math.min(...synthesisTimes).toFixed(3)),
       synthesisMedianMs: Number(median(synthesisTimes).toFixed(3)),
-      synthesisRtf: Number((median(synthesisTimes) / 1000 / sampleSeconds).toFixed(6)),
+      synthesisMaxMs: Number(Math.max(...synthesisTimes).toFixed(3)),
+      synthesisRtfMin: Number((Math.min(...synthesisTimes) / 1000 / sampleSeconds).toFixed(6)),
+      synthesisRtfMedian: Number((median(synthesisTimes) / 1000 / sampleSeconds).toFixed(6)),
+      synthesisRtfMax: Number((Math.max(...synthesisTimes) / 1000 / sampleSeconds).toFixed(6)),
       outputSha256: sha256(result.wav)
     },
     measurement: {

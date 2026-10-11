@@ -225,6 +225,7 @@ async function buildProfiles() {
     stageProfile(variant, audioByVariant[variant]);
     const rpk = buildRpk(variant);
     validateRpk(rpk, variant, stamp, audioByVariant[variant]);
+    copyFileSync(rpk, path.join(artifactDirectory, `${variant}.rpk`));
     const startup = benchmarkVelaStartup(rpk);
     const manifest = JSON.parse(readFileSync(path.join(APP, 'src/manifest.json')));
     const buildManifest = JSON.parse(readFileSync(path.join(APP, 'build/manifest.json')));
@@ -251,6 +252,9 @@ async function buildProfiles() {
   }
 
   stageProfile('a', reference.bytes);
+  for (const profile of profiles) {
+    copyFileSync(path.join(artifactDirectory, `${profile.variant.toLowerCase()}.rpk`), profile.rpk);
+  }
   const commit = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const branch = execFileSync('git', ['-C', ROOT, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim();
   const quality = {
