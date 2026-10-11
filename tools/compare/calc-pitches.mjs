@@ -28,7 +28,7 @@ function list2FromItems(items) {
 }
 
 function oracleInput(clause) {
-  const lines = [clause.items.length, clause.postPause, clause.startSentence ? 1 : 0, clause.tone];
+  const lines = [clause.items.length, clause.postPause, clause.startSentence ? 1 : 0, clause.tone, 0];
   for (const row of clause.items) lines.push(row.phcode, row.stresslevel, row.wordstress, row.tonePh, row.sourceix, row.synthflags);
   return lines.join('\n') + '\n';
 }

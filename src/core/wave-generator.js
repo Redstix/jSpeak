@@ -770,13 +770,27 @@ export function createWaveGenerator(options) {
     unsupported('command-' + type);
   }
 
-  function fill(commands, output) {
+  function fill(commands, output, fillOptions) {
     if (!Array.isArray(commands)) throw new TypeError('Expected wave command array');
     if (!(output instanceof Int16Array)) throw new TypeError('Expected PCM16 output array');
     if (output.length === 0) throw new RangeError('PCM output chunk must not be empty');
+    const options = fillOptions || {};
+    const commandCount = options.commandCount === undefined
+      ? commands.length
+      : integer(options.commandCount, 'command count');
+    if (commandCount < 0 || commandCount > commands.length) {
+      throw new RangeError('Wave command count is outside the command array');
+    }
+    const startIndex = options.commandIndex === undefined
+      ? commandIndex
+      : integer(options.commandIndex, 'command index');
+    if (startIndex < 0 || startIndex > commandCount) {
+      throw new RangeError('Wave command index is outside the command window');
+    }
+    commandIndex = startIndex;
     currentCommands = commands;
     let produced = 0;
-    while (commandIndex < commands.length && produced < output.length) {
+    while (commandIndex < commandCount && produced < output.length) {
       const command = commands[commandIndex];
       if (!command || typeof command !== 'object') throw new TypeError('Invalid wave command');
       commandInteger(command.type, 'command type');
@@ -784,12 +798,12 @@ export function createWaveGenerator(options) {
       if (resume) return { produced, finished: false, commandIndex, resume: true };
       commandIndex++;
     }
-    if (commandIndex >= commands.length && produced < output.length && echoComplete > 0) {
+    if (commandIndex >= commandCount && produced < output.length && echoComplete > 0) {
       produced += playSilence(echoComplete, output, produced);
       if (resume) return { produced, finished: false, commandIndex, resume: true };
       echoComplete = 0;
     }
-    const finished = commandIndex >= commands.length;
+    const finished = commandIndex >= commandCount;
     if (finished) resume = false;
     return { produced, finished, commandIndex, resume };
   }

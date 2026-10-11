@@ -10,6 +10,7 @@ import { runtimeSnapshot } from './runtime-snapshot.mjs';
 import { readWav } from './wav.mjs';
 import { comparePcm } from './pcm.mjs';
 import { createWaveGenerator } from '../../src/core/wave-generator.js';
+import { createArrayCommandSource, createBoundedSynthesisRuntime } from '../../src/core/synthesis-runtime.js';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -68,6 +69,35 @@ function generateInChunks(commands, voiceState, phondata, chunkSize) {
   return output.subarray(0, samples);
 }
 
+function generateWithRuntime(commands, voiceState, phondata, expectedSamples) {
+  const output = new Int16Array(expectedSamples.length);
+  const scheduled = [];
+  let offset = 0;
+  const runtime = createBoundedSynthesisRuntime({
+    createCommandSource: () => createArrayCommandSource(commands),
+    createWaveGenerator: () => createWaveGenerator({
+      voice: voiceState, phondataBytes: phondata, randomSeed: 1
+    }),
+    onAudio: chunk => {
+      output.set(chunk.samples, offset);
+      offset += chunk.samples.length;
+      chunk.release();
+    },
+    onEnd: () => {},
+    onError: error => {
+      throw error;
+    },
+    onCancel: () => {},
+    scheduler: callback => scheduled.push(callback)
+  });
+  runtime.start();
+  while (scheduled.length > 0) scheduled.shift()();
+  assert.equal(runtime.stats().state, 'completed', 'Runtime synthesis did not finish');
+  assert.equal(runtime.stats().emittedSamples, expectedSamples.length, 'Runtime sample count differs');
+  assert.equal(offset, expectedSamples.length, 'Runtime copy offset differs');
+  return { samples: output, stats: runtime.stats(), profile: runtime.profile() };
+}
+
 export function verifyWaveGeneratorFull({ directory } = {}) {
   assert(existsSync(generateCommandsBinary), 'Build the original Generate command oracle first');
   const cases = observedCases();
@@ -85,7 +115,7 @@ export function verifyWaveGeneratorFull({ directory } = {}) {
 
   const phondata = new Uint8Array(readFileSync(path.join(referenceBuild, 'espeak-ng-data/phondata')));
   const inputs = generateCommandsInputs();
-  const files = runtimeSnapshot(['src/core/wave-generator.js'], [
+  const files = runtimeSnapshot(['src/core/wave-generator.js', 'src/core/synthesis-runtime.js'], [
     'tools/oracle/generate-commands-oracle.c', 'tools/oracle/generate-commands-build.mjs',
     'tools/compare/wave-generator-full.mjs',
     'artifacts/oracle-clause-word2-2pOOA5/report.json',
@@ -118,14 +148,29 @@ export function verifyWaveGeneratorFull({ directory } = {}) {
           { samples: generated, sampleRate: profile.sampleRate });
       });
       assert(chunkResults.every(result => result.exact), capture.id + ' full PCM or chunk consistency');
+      const runtimeGenerated = generateWithRuntime(
+        commands, commandPlans.voiceState, phondata, wav.samples
+      );
+      const runtimeResult = comparePcm({ samples: wav.samples, sampleRate: wav.sampleRate },
+        { samples: runtimeGenerated.samples, sampleRate: profile.sampleRate });
+      assert.equal(runtimeResult.exact, true, capture.id + ' bounded runtime PCM differs');
+      assert.equal(runtimeGenerated.stats.maxQueueCommands <= runtimeGenerated.profile.commandCapacity, true,
+        capture.id + ' runtime command queue grew beyond its bound');
+      assert.equal(runtimeGenerated.stats.maxInFlightChunks <= runtimeGenerated.profile.pcmInFlightChunks, true,
+        capture.id + ' runtime PCM pool grew beyond its bound');
       const generator = createWaveGenerator({ voice: commandPlans.voiceState, phondataBytes: phondata, randomSeed: 1 });
       results.push({
         id: capture.id, status: 'exact', clauses: capture.clauses.length, commandCount: commands.length,
         samples: wav.samples.length, wavSha256: sha256(readFileSync(wavPath)),
         bufferProfile: generator.bufferProfile(), chunkSizes,
+        runtime: {
+          stats: runtimeGenerated.stats,
+          profile: runtimeGenerated.profile,
+          exact: runtimeResult.exact
+        }
       });
     }
-    assert.deepEqual(runtimeSnapshot(['src/core/wave-generator.js'], [
+    assert.deepEqual(runtimeSnapshot(['src/core/wave-generator.js', 'src/core/synthesis-runtime.js'], [
       'tools/oracle/generate-commands-oracle.c', 'tools/oracle/generate-commands-build.mjs',
       'tools/compare/wave-generator-full.mjs',
       'artifacts/oracle-clause-word2-2pOOA5/report.json',
@@ -142,11 +187,15 @@ export function verifyWaveGeneratorFull({ directory } = {}) {
     scope: 'Fixed en-us full Wavegen command profile: SPECT, SPECT2, WAVE, WAVE2, PAUSE, AMPLITUDE, PITCH, EMBEDDED and MARKER',
     profile, totalCases: results.length, exactCases: results.length,
     commandObservation: { capacity: profile.commandCapacity, runtimeCapacity: 170,
-      purpose: 'Capture the complete logical Generate plan; runtime queue scheduling remains M11 scope' },
+      purpose: 'Capture the complete logical Generate plan; bounded runtime queue scheduling is verified in this report' },
     comparedClauses: results.reduce((sum, row) => sum + row.clauses, 0),
     comparedCommands: results.reduce((sum, row) => sum + row.commandCount, 0),
     comparedSamples: results.reduce((sum, row) => sum + row.samples, 0),
     chunkSizes, unsupportedCases: 0,
+    runtimeVerification: {
+      status: 'exact', commandCapacity: 170, pcmChunkSamples: 4096,
+      pcmInFlightChunks: 4, pcmQueueBytes: 32768
+    },
     profileUnusedUnsupported: ['WCMD_KLATT', 'WCMD_KLATT2', 'WCMD_VOICE', 'WCMD_MBROLA_DATA',
       'WCMD_FMT_AMPLITUDE', 'WCMD_SONIC_SPEED', 'WCMD_PHONEME_ALIGNMENT'],
     requestSha256, oracleReference: inputs.reference, files, artifactDirectory: directory,
