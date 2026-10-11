@@ -1,0 +1,153 @@
+[
+  {
+    "id": "000-empty",
+    "text": "",
+    "classification": "exact"
+  },
+  {
+    "id": "001-greeting",
+    "text": "你好。",
+    "classification": "exact"
+  },
+  {
+    "id": "002-hello-world",
+    "text": "你好，世界。",
+    "classification": "exact"
+  },
+  {
+    "id": "003-weather",
+    "text": "今天天气很好。",
+    "classification": "exact"
+  },
+  {
+    "id": "004-self-introduction",
+    "text": "我会说普通话。",
+    "classification": "exact"
+  },
+  {
+    "id": "005-digits-one-to-ten",
+    "text": "一二三四五六七八九十。",
+    "classification": "exact"
+  },
+  {
+    "id": "006-zero",
+    "text": "零",
+    "classification": "exact"
+  },
+  {
+    "id": "007-number-101",
+    "text": "一百零一。",
+    "classification": "exact"
+  },
+  {
+    "id": "008-date",
+    "text": "二零二六年十月十一日。",
+    "classification": "exact"
+  },
+  {
+    "id": "009-time",
+    "text": "现在三点十五分。",
+    "classification": "exact"
+  },
+  {
+    "id": "010-pinyin-tone-digits",
+    "text": "ni3 hao3 shi4 jie4.",
+    "classification": "exact"
+  },
+  {
+    "id": "011-pinyin-words",
+    "text": "zhong1 wen2",
+    "classification": "exact"
+  },
+  {
+    "id": "012-question",
+    "text": "你好吗？",
+    "classification": "exact"
+  },
+  {
+    "id": "013-exclamation",
+    "text": "太好了！",
+    "classification": "exact"
+  },
+  {
+    "id": "014-test",
+    "text": "中文测试。",
+    "classification": "exact"
+  },
+  {
+    "id": "015-beijing",
+    "text": "北京欢迎你。",
+    "classification": "exact"
+  },
+  {
+    "id": "016-location",
+    "text": "请问洗手间在哪里？",
+    "classification": "exact"
+  },
+  {
+    "id": "017-synthesis",
+    "text": "语音合成测试。",
+    "classification": "exact"
+  },
+  {
+    "id": "018-world-short",
+    "text": "世界。",
+    "classification": "exact"
+  },
+  {
+    "id": "019-chinese-short",
+    "text": "中文。",
+    "classification": "exact"
+  },
+  {
+    "id": "020-welcome",
+    "text": "你好，欢迎来到语音合成测试。",
+    "classification": "exact"
+  },
+  {
+    "id": "021-first-test",
+    "text": "这是第一个中文语音测试。",
+    "classification": "exact"
+  },
+  {
+    "id": "022-thanks-goodbye",
+    "text": "谢谢，再见。",
+    "classification": "exact"
+  },
+  {
+    "id": "023-apology",
+    "text": "对不起，我没有听清楚。",
+    "classification": "exact"
+  },
+  {
+    "id": "024-zero-character",
+    "text": "〇",
+    "classification": "exact"
+  },
+  {
+    "id": "900-explicit-phonemes",
+    "text": "[[s.'i.]] 世界。",
+    "classification": "exact"
+  },
+  {
+    "id": "901-emoji",
+    "text": "你好😀世界",
+    "classification": "exact"
+  },
+  {
+    "id": "902-malformed-utf8",
+    "inputBytesHex": "e4bda0ff",
+    "classification": "exact-upstream-bytes"
+  },
+  {
+    "id": "903-large-input",
+    "text": "测试",
+    "repeat": 300,
+    "classification": "exact"
+  },
+  {
+    "id": "904-voice-switch-en-us",
+    "text": "[[en-us]] hello",
+    "classification": "unsupported-dynamic-en-us-dictionary"
+  }
+]

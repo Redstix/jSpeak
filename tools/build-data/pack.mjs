@@ -83,8 +83,10 @@ export function makePack({ upstreamCommit, buildFingerprint, sourceDataFingerpri
     ids.add(id); sources.add(sourcePath); targets.add(packagePath);
     return { id, sourcePath, packagePath, uri: '/common/espeak/' + packagePath, role, ...describeBytes(bytes) };
   }).sort((a, b) => a.sourcePath < b.sourcePath ? -1 : a.sourcePath > b.sourcePath ? 1 : 0);
+  const voice = profile?.voice;
+  if (!/^(en-us|cmn)$/.test(voice || '')) throw new Error('Unsupported language profile: ' + voice);
   return {
-    magic: PACK_MAGIC, schemaVersion: PACK_SCHEMA_VERSION, scope: 'en-us-candidate-probe', closureComplete: false,
+    magic: PACK_MAGIC, schemaVersion: PACK_SCHEMA_VERSION, scope: voice + '-candidate-probe', closureComplete: false,
     upstreamCommit, buildFingerprint, sourceDataFingerprint, dataFingerprint: dataFingerprint(files), profile,
     sampleRate: SAMPLE_RATE, phondataVersion: PHONDATA_VERSION, pageBytes: PAGE_BYTES,
     hash32Spec: HASH_SPEC, totalDataBytes: files.reduce((sum, f) => sum + f.byteLength, 0), files
@@ -94,7 +96,8 @@ export function makePack({ upstreamCommit, buildFingerprint, sourceDataFingerpri
 // Full desktop verification. Device probes use the explicitly specified 32-bit checksum.
 export function verifyPack(manifest, getBytes, expectedCommit) {
   if (!manifest || manifest.magic !== PACK_MAGIC || manifest.schemaVersion !== PACK_SCHEMA_VERSION) throw new Error('Incompatible data pack version');
-  if (manifest.scope !== 'en-us-candidate-probe' || manifest.closureComplete !== false) throw new Error('Unsupported pack scope');
+  if (!/^(en-us|cmn)-candidate-probe$/.test(manifest.scope || '') || manifest.closureComplete !== false) throw new Error('Unsupported pack scope');
+  if (!manifest.profile || manifest.scope !== manifest.profile.voice + '-candidate-probe') throw new Error('Profile and pack scope mismatch');
   if (expectedCommit && manifest.upstreamCommit !== expectedCommit) throw new Error('Upstream commit mismatch');
   if (!Array.isArray(manifest.files) || !manifest.files.length) throw new Error('Empty data pack');
   const targets = new Set();

@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "upstreamCommit": "ba90c8e9f440ad544f674a790bb5f53878b6ffc5",
+  "profile": {
+    "voice": "cmn",
+    "speed": 175,
+    "pitch": 50,
+    "amplitude": 100,
+    "inputEncoding": "UTF-8"
+  },
+  "sourceDataFingerprint": "f50aa43366fafe7a8fdb74bb99fd17a685dafda5eb17e50ef7f92a0a322ffea9",
+  "selectedDataFingerprint": "d7d03441197fbbfc69170461f8bed2c1e1a2558d0e0a2ee8b0051b54bc3d4f48",
+  "sourceInputs": [
+    {
+      "sourcePath": "dictsource/cmn_list",
+      "byteLength": 36237,
+      "sha256": "9236137395ecf5c658ff1d2d1b0c1f457f37d30e307e4659cc23e49010544bbc"
+    },
+    {
+      "sourcePath": "dictsource/cmn_rules",
+      "byteLength": 3997,
+      "sha256": "2af85cfcc6526497e71f8adf29d0285c6d0103d3c3e2de9b127a71d602884bcf"
+    },
+    {
+      "sourcePath": "dictsource/cmn_emoji",
+      "byteLength": 91353,
+      "sha256": "e2eb2d7ff740929d4fb85bfb861368d659d15c38bca98488e2641cf97e43333e"
+    }
+  ],
+  "files": [
+    {
+      "id": "cmn_dict",
+      "sourcePath": "cmn_dict",
+      "byteLength": 1578875,
+      "sha256": "726aeed170a6ca641b1ff27a1617859efd8ee3138c312b121a6af5e9c04fff91"
+    },
+    {
+      "id": "intonations",
+      "sourcePath": "intonations",
+      "byteLength": 2584,
+      "sha256": "c4ff28c76c30cf7d9f07643e08ec39e68769ef648098269b5c0ab7731218e219"
+    },
+    {
+      "id": "voice_cmn",
+      "sourcePath": "lang/sit/cmn",
+      "byteLength": 686,
+      "sha256": "a130a38e3b622735c2401cb37f6719f46995e84a133729185cef9a543ec0b072"
+    },
+    {
+      "id": "phondata",
+      "sourcePath": "phondata",
+      "byteLength": 600104,
+      "sha256": "fbf85d4b2d5ed7f0da20e22a3063cfb2ad0bb36cfb322d5e21a2e9710ad509b7"
+    },
+    {
+      "id": "phonindex",
+      "sourcePath": "phonindex",
+      "byteLength": 48856,
+      "sha256": "178d6c50c3d9e62303dcc3090348629b50a648ed12f8a831b444a558d112d783"
+    },
+    {
+      "id": "phontab",
+      "sourcePath": "phontab",
+      "byteLength": 64056,
+      "sha256": "7462b1d693c4f46b394308052a3ab9f824ff03e1a6ab2ca434fdde0283f4b444"
+    }
+  ],
+  "audio": {
+    "text": "你好，世界。",
+    "sha256": "47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1",
+    "byteLength": 65688,
+    "sampleCount": 32822
+  }
+}

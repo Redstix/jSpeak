@@ -25,6 +25,8 @@ npm test
 ```sh
 npm run oracle:build  # 固定版本的 C 参考程序
 npm run test:oracle   # 22 例 C 自身重复性检查，不是 C/JS 兼容测试
+npm run language:cmn:build  # 生成并差分验证独立 cmn 原始数据包
+npm run language:cmn:verify # 校验 cmn 包、源输入、固定语料和参考 WAV
 npm run oracle:trace:build  # 隔离构建内部前端观察补丁，保留原参考构建
 npm run test:oracle:trace   # 50 例 clean/instrumented 对照与上游 CTest
 npm run oracle:unicode:build # 在已有双构建上链接独立 C Unicode 参考
@@ -57,5 +59,6 @@ npm run probe:source  # 当前项目及固定上游源码交付副本
 - [兼容性约束](docs/COMPATIBILITY_SPEC.md)
 - [Trace 协议](docs/TRACE_FORMAT.md)
 - [运行时与设备门槛](docs/RUNTIME_PROFILE.md)
+- [普通话数据阶段](docs/MANDARIN_SUPPORT.md)
 - [源码映射](docs/SOURCE_MAPPING.md)
 - [进度与证据](docs/STATUS.md)

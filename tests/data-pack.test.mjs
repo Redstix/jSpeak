@@ -106,6 +106,18 @@ test('upstream phondata header is validated independently of manifest checksums'
   }
 });
 
+test('language packs use an explicit profile scope and reject unreviewed voices', () => {
+  const cmn = makePack({ upstreamCommit: commit, buildFingerprint: 'b'.repeat(64), sourceDataFingerprint: 'c'.repeat(64),
+    profile: { voice: 'cmn' }, entries: [{ id: 'sample', sourcePath: 'sample', packagePath: 'sample.txt', bytes: bytes.subarray(0, 16) }] });
+  assert.equal(cmn.scope, 'cmn-candidate-probe');
+  assert.equal(verifyPack(cmn, () => bytes.subarray(0, 16), commit), true);
+  const altered = clone(cmn); altered.scope = 'en-us-candidate-probe';
+  assert.throws(() => verifyPack(altered, () => bytes.subarray(0, 16), commit), /Profile and pack scope mismatch/);
+  assert.throws(() => makePack({ upstreamCommit: commit, buildFingerprint: 'b'.repeat(64), sourceDataFingerprint: 'c'.repeat(64),
+    profile: { voice: 'zh' }, entries: [{ id: 'sample', sourcePath: 'sample', packagePath: 'sample.txt', bytes: bytes.subarray(0, 16) }] }),
+    /Unsupported language profile/);
+});
+
 test('source inventory is sorted, hashes exact bytes, and rejects symlink indirection', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'jspeak-pack-test-'));
   try {

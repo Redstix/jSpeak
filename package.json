@@ -68,6 +68,8 @@
     "fuzz:minimize": "node tools/fuzz/minimize.mjs",
     "data:build": "node tools/build-data/build.mjs",
     "data:verify": "node tools/build-data/verify.mjs",
+    "language:cmn:build": "node tools/build-language/build.mjs",
+    "language:cmn:verify": "node tools/build-language/verify.mjs",
     "probe:build": "npm run data:build && npm run assets --prefix apps/vela-probe && npm run build --prefix apps/vela-probe",
     "probe:source": "node tools/probe/source-bundle.mjs",
     "number:build": "node tools/build-number/build.mjs",
