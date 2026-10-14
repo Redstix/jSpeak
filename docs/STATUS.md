@@ -1,6 +1,17 @@
-# Implementation status — 2026-10-11
+# Implementation status — 2026-10-14
 
 执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile与CalcPitches_Tone切片已落地：数据差分29 exact/1 unsupported，tone差分13/13 exact；cmn完整JS前端和真机中文出声未完成。
+
+## 2026-10-14 交接核查（实测，非文档推断）
+
+本轮交接给另一台机器上的另一个 agent（clone 后继续），以下是交接时点实际核对到的事实：
+
+- 权威分支 `perf/quickjs-vela-optimization` @ `9fbbe75`，工作树干净、与 origin 同步；该分支 = `work/bootstrap`(`576c5d0`) + 2 个 M14 提交；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 为历史存档。
+- **无人值守流水线已停止**：最后一个 jSpeak codex 会话结束于 2026-10-11 11:38；10-12/13/14 无 jSpeak 会话、无提交（按 `~/.codex/sessions/2026/10/<day>` 逐日计数核实）。
+- 静默原因：本机「jSpeak 流水线看门狗」cron 任务已不在 cron 表中，而 Codex 阶段 report 写在 `~/.hermes/cache/scratch/`——该目录 idle 24h 即被 prune，report 一并消失；既无看门狗又留不住 report，停摆三天无人上报。
+- 模型通道（本机）已恢复：`z-ai/glm-5.3` 新旧两把 key 均 HTTP 200，LiteLLM 响应头 `x-litellm-model-name: nvidia_nim/z-ai/glm-5.3`，当前由 glm-5.3 服务，不必再落 deepseek。
+- 交接时点基线复跑：`npm test` **278/278、0 fail、0 skip**（约 30.8s，Node v24.21.0），与既有记录一致；新机器 clone 后应得到同样结果。
+- 0.5.1 A/B/C 三档 RPK 在本机 `apps/vela-tts/dist/` 存在且大小与构建记录一致；`dist/` 被 gitignore，clone 后须 `npm run tts:profiles` 重建，见 [HANDOVER](HANDOVER.md) §0。
 
 ## 已完成
 
@@ -67,12 +78,16 @@
 - ENDED 不等于出声；已记录的双音听感不能替代后续合成语音的用户确认。
 - maxSlice 77ms 未定位；8–9ms 定时读数不构成硬实时保证。Node/mock 不证明 UX 渲染、平台契约或真实音频行为。
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
+- 交接与运维纪律：无人值守链的脚本与 report 必须放持久目录（`~/.hermes/scripts/`）；放 `~/.hermes/cache/scratch/` 会被 24h prune 清掉——2026-10-11 之后整条链停摆三天无人发现，直接原因就是「看门狗 cron 已丢失 + report 落在 scratch」。
+- 交接只交仓库内产物：`dist/`、`build/`、`artifacts/`、`upstream/`、`node_modules/` 全部 gitignore；新机器 clone 后必须按 [HANDOVER](HANDOVER.md) §0 重建（C Oracle、apps 依赖、三档 RPK），重建会得到新的可见构建戳，身份以文档记录的 SHA256 为准。
 - M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13数据最小化未开始；M14仅完成本轮启动解析/打包减法，设备启动、heap、RTF、S1稳定性与最终预算未验收。
 
 ## 下一步
 
-1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
+0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、三档 RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。
+1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle（当前 JS 22809 样本 vs C 23190，首个差异样本 1384）；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
-3. 用户真机验收0.5.1 A/B/C启动与听感；随后继续M13数据最小化、M14设备资源/RTF证据与S1稳定性。M15完整JS/真机验收继续单列跟踪；M16维护演练纳入首发。
+3. M13数据最小化（未开始）、M14设备资源/RTF证据与S1稳定性、M16维护演练纳入首发。M15完整JS/真机验收继续单列跟踪。
+4. 基础设施：若继续无人值守，重建看门狗，并把阶段 report 从 scratch 迁到持久目录。
 
 不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。

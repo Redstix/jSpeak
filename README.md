@@ -2,7 +2,7 @@
 
 面向 Xiaomi Vela 的 eSpeak NG 纯 JavaScript 兼容移植实验。
 
-**当前未实现 TTS，也未证明设备实时可行。** 原始方案见 `design/stages/`，修订实施约束见 `docs/`。原始文档为历史基线；冲突以新的实施契约为准。
+**当前状态（2026-10-14）**：eSpeak NG 前端到 PCM 的函数级切片已与 C Oracle 逐点 exact（M00–M11），并产出可安装的 Vela TTS 测试包（0.5.0 与 0.5.1 A/B/C 三档）；但集成"文本→命令"路径尚未与 C exact，真机启动闪退的根因待用户验收判定，**未证明设备实时可行**。当前权威分支、环境重建与待办队列见[交接入口](docs/HANDOVER.md)。原始方案见 `design/stages/`，修订实施约束见 `docs/`。原始文档为历史基线；冲突以新的实施契约为准。
 
 ## 原则
 
@@ -42,6 +42,8 @@ npm run test:clause         # M02.1 ReadClause 差分，显式列出未支持依
 npm ci --prefix apps/vela-probe --registry=https://registry.npmjs.org
 npm run probe:build   # 先生成/校验真实数据，再打包当前探针版本
 npm run probe:source  # 当前项目及固定上游源码交付副本
+npm ci --prefix apps/vela-tts --registry=https://registry.npmjs.org
+npm run tts:profiles  # 构建 0.5.1 A/B/C 三档 Vela TTS 包到 apps/vela-tts/dist/
 ```
 
 源码提交不包括本地会话、私钥、上游 checkout、依赖及构建产物。参考程序说明见 [Oracle harness](tools/oracle/README.md)。
@@ -64,3 +66,5 @@ npm run probe:source  # 当前项目及固定上游源码交付副本
 - [普通话数据阶段](docs/MANDARIN_SUPPORT.md)
 - [源码映射](docs/SOURCE_MAPPING.md)
 - [进度与证据](docs/STATUS.md)
+- [0.5.1 A/B/C 构建与量化差异](docs/build-results/2026-10-11-tts-0.5.1-profiles.md)
+- [0.5.1 真机待验收（等用户填）](docs/device-results/2026-10-11-tts-0.5.1-profiles.md)
