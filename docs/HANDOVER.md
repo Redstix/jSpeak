@@ -16,8 +16,9 @@ clone 之后**没有** `dist/`、`build/`、`artifacts/`、`upstream/`、`node_m
 - 离线/受限网络：先在有网机器上 `npm run probe:source`，用产出的 `espeak-ng.git.bundle` 恢复上游，见 [SOURCE_BUNDLE.md](SOURCE_BUNDLE.md)。
 
 ```sh
-git clone https://github.com/Redstix/jSpeak.git && cd jSpeak
-git checkout perf/quickjs-vela-optimization      # 当前最新分支，见 §2 分支拓扑
+# 仓库默认分支是 work/bootstrap（落后 2 个提交），必须显式指定分支
+git clone -b perf/quickjs-vela-optimization https://github.com/Redstix/jSpeak.git
+cd jSpeak
 
 npm run oracle:build            # 按 upstream.json 自动 clone 上游并 detached checkout 固定 commit
 npm ci --prefix apps/vela-probe --registry=https://registry.npmjs.org
@@ -76,7 +77,7 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 
 ## 5. 仓库与操作纪律
 
-- 远端 `origin = https://github.com/Redstix/jSpeak.git`（private，HTTPS + `gh` 凭据）。已推送分支：`main`、`work/bootstrap`、`work/vela-performance`、`perf/quickjs-vela-optimization`。
+- 远端 `origin = https://github.com/Redstix/jSpeak.git`（**公开仓库**，HTTPS + `gh` 凭据；默认分支是 `work/bootstrap`，clone 时按 §0 用 `-b perf/quickjs-vela-optimization`）。已推送分支：`main`、`work/bootstrap`、`work/vela-performance`、`perf/quickjs-vela-optimization`。
 - 提交信息用**中文**风格；署名据实；**不加** `Co-Authored-By` / AI trailer；**不改** author/committer；**不 force push、不改写历史**。
 - 不动 `work/bootstrap` 上的既有提交；新工作另开分支或续在 `perf/quickjs-vela-optimization` 上；`main` 只是历史存档。
 - 核心 `src/` 不 import Vela/Node/DOM；系统 API 在 `apps/` 适配层，C 构建/转换工具在 `tools/`。
