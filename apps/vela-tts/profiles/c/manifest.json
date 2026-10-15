@@ -1,8 +1,8 @@
 {
   "package": "org.jspeak.tts",
   "name": "jSpeak TTS测试",
-  "versionName": "0.5.2-c",
-  "versionCode": 13,
+  "versionName": "0.5.3-c",
+  "versionCode": 16,
   "minPlatformVersion": 1200,
   "icon": "/common/logo.png",
   "deviceTypeList": ["watch"],

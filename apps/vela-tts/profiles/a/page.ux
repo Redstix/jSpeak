@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak TTS 0.5.2-A</text>
+    <text class="title">jSpeak TTS 0.5.3-A</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
         <text class="note">固定英文：Hello world.</text>
@@ -26,7 +26,7 @@ import { createTtsSession } from '../../tts-service'
 export default {
   private: {
     results: [
-      { label: '版本', value: 'READY 0.5.2-A ' + BUILD_STAMP },
+      { label: '版本', value: 'READY 0.5.3-A ' + BUILD_STAMP },
       { label: '数据', value: '候选 ' + DATA_ASSETS.totalDataBytes + 'B；闭包未完成' },
       { label: '流程', value: 'WAITING' }
     ]

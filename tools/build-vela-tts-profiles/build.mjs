@@ -181,7 +181,7 @@ function validateRpk(rpk, variant, stamp, audioBytes) {
   const page = readZip(rpk, 'pages/index/index.js').toString('utf8');
   const names = new Set(zipNames(rpk));
   if (manifest.config?.jspeakProfile?.variant !== variant.toUpperCase()) throw new Error(`Profile mismatch in ${rpk}`);
-  if (!page.includes(`READY 0.5.2-${variant.toUpperCase()}`) || !page.includes(stamp)) {
+  if (!page.includes(`READY 0.5.3-${variant.toUpperCase()}`) || !page.includes(stamp)) {
     throw new Error(`Version or build stamp missing in ${rpk}`);
   }
   if (variant === 'a') {

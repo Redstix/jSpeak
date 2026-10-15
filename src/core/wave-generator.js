@@ -578,6 +578,13 @@ export function createWaveGenerator(options) {
     if (!wvoice) unsupported('voice-state');
     if (!resume) setSynth(length, modulation, frame1, frame2);
     let produced = 0;
+    let spectrum = hspect[harmspectIndex];
+    const sineTable = sinTable;
+    const waveMultiplier = waveMult;
+    const peakCount = C.N_PEAKS;
+    const lowHarmonicLimit = C.N_LOWHARM;
+    const harmonicPeakStart = wvoice.nHarmonicPeaks + 1;
+    const hasBreath = wvoice.breath[0] !== 0;
     for (;;) {
       if (endWave === 0 && samplecount === nsamples) {
         resume = false;
@@ -596,18 +603,19 @@ export function createWaveGenerator(options) {
         hfFactor = wdata.pitch >> 11;
         maxh = maxh2;
         harmspectIndex = hswitch;
+        spectrum = hspect[harmspectIndex];
         hswitch ^= 1;
         maxh2 = peaksToHarmspect(wdata.pitch << 4, hspect[hswitch], 1);
         setBreath();
       } else if ((samplecount & 7) === 0) {
-        for (let h = 1; h < C.N_LOWHARM && h <= maxh2 && h <= maxh; h++) {
-          hspect[harmspectIndex][h] = add32(hspect[harmspectIndex][h], harmInc[h]);
+        for (let h = 1; h < lowHarmonicLimit && h <= maxh2 && h <= maxh; h++) {
+          spectrum[h] = (spectrum[h] + harmInc[h]) | 0;
         }
         if (agc < 256) agc++;
       }
-      samplecount = add32(samplecount, 1);
+      samplecount = (samplecount + 1) | 0;
       if (wavephase > 0) {
-        wavephase = add32(wavephase, phaseinc);
+        wavephase = (wavephase + phaseinc) | 0;
         if (wavephase < 0) {
           cbytes = wavemultOffset - Math.trunc(cycleSamples / 2);
           if (samplecount > nsamples) {
@@ -648,49 +656,51 @@ export function createWaveGenerator(options) {
             }
           }
         }
-      } else wavephase = add32(wavephase, phaseinc);
+      } else wavephase = (wavephase + phaseinc) | 0;
       const waveph = (wavephase >> 16) & 0xffff;
       let total = 0;
-      cbytes = add32(cbytes, 1);
+      cbytes = (cbytes + 1) | 0;
       if (cbytes >= 0 && cbytes < wavemultMax) {
-        for (let pk = wvoice.nHarmonicPeaks + 1; pk < C.N_PEAKS; pk++) {
-          const theta = mul32(peakHarmonic[pk], waveph) & 0xffff;
-          total = add32(total, mul32(sinTable[theta >> 5], peakHeight[pk]));
+        for (let pk = harmonicPeakStart; pk < peakCount; pk++) {
+          const theta = Math.imul(peakHarmonic[pk], waveph) & 0xffff;
+          total = (total + Math.imul(sineTable[theta >> 5], peakHeight[pk])) | 0;
         }
-        total = mul32(Math.trunc(total / hfFactor), waveMult[cbytes]);
+        total = Math.imul(Math.trunc(total / hfFactor), waveMultiplier[cbytes]);
       }
       let theta = waveph;
       let h = 1;
       for (; h <= hSwitchSign; h++) {
-        total = add32(total, mul32(sinTable[theta >> 5], hspect[harmspectIndex][h]));
+        total = (total + Math.imul(sineTable[theta >> 5], spectrum[h])) | 0;
         theta = (theta + waveph) & 0xffff;
       }
       while (h <= maxh) {
-        total = add32(total, -mul32(sinTable[theta >> 5], hspect[harmspectIndex][h]));
+        total = (total - Math.imul(sineTable[theta >> 5], spectrum[h])) | 0;
         theta = (theta + waveph) & 0xffff;
         h++;
       }
-      if (voicing !== 64) total = mul32(total >> 6, voicing);
-      if (wvoice.breath[0]) total = add32(total, applyBreath());
+      if (voicing !== 64) total = Math.imul(total >> 6, voicing);
+      if (hasBreath) total = (total + applyBreath()) | 0;
       let z2 = 0;
       if (wdata.mixWaveIndex < wdata.nMixWavefile) {
         const sample = readMixSample();
         z2 = Math.imul(sample, wdata.amplitudeV) >> 10;
         z2 = Math.trunc(Math.imul(z2, wdata.mixWaveAmp) / 32);
       }
-      let z1 = add32(z2, ((total >> 8) * amplitude2 >> 13));
+      let z1 = (z2 + ((total >> 8) * amplitude2 >> 13)) | 0;
       const echo = echoBuffer[echoTail++] * echoAmplitude;
-      z1 = add32(z1, echo >> 8);
+      z1 = (z1 + (echo >> 8)) | 0;
       if (echoTail >= C.N_ECHO_BUF) echoTail = 0;
-      let z = mul32(z1, agc) >> 8;
+      let z = Math.imul(z1, agc) >> 8;
       if (z >= 32768 || z <= -32768) {
         if (z1 === 0) unsupported('automatic-gain-division-by-zero');
         const ov = Math.trunc(8388608 / z1) - 1;
         if (ov < agc) agc = ov;
-        z = mul32(z1, agc) >> 8;
+        z = Math.imul(z1, agc) >> 8;
       }
-      output[outputOffset + produced++] = toPcm16(z);
-      echoBuffer[echoHead++] = toPcm16(z);
+      const wrapped = z & 0xffff;
+      const sample = wrapped > 0x7fff ? wrapped - 0x10000 : wrapped;
+      output[outputOffset + produced++] = sample;
+      echoBuffer[echoHead++] = sample;
       if (echoHead >= C.N_ECHO_BUF) echoHead = 0;
       if (outputOffset + produced >= output.length) {
         resume = true;
