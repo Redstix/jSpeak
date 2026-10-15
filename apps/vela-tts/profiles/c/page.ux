@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak TTS 0.5.1-C</text>
+    <text class="title">jSpeak TTS 0.5.2-C</text>
     <div class="body">
       <text class="note">C档：A输出4:1平均降采样，5512Hz/16bit</text>
       <input class="button" type="button" value="播放" onclick="play" />
@@ -16,9 +16,9 @@ import { BUILD_STAMP } from '../../build-stamp'
 
 export default {
   private: {
-    status: 'READY 0.5.1-C ' + BUILD_STAMP
+  status: 'READY 0.5.2-C ' + BUILD_STAMP
   },
-  onInit() { this.status = 'READY 0.5.1-C ' + BUILD_STAMP },
+  onInit() { this.status = 'READY 0.5.2-C ' + BUILD_STAMP },
   onHide() { this.stop() },
   onDestroy() { this.stop() },
   play() {

@@ -83,6 +83,76 @@ export function createPhonemeTables(bytes) {
   return Object.freeze({ tables: tables, consumedBytes: cursor, select: select });
 }
 
+export function selectPhonemeTable(bytes, targetIndex) {
+  byteInput(bytes, 'phontab');
+  indexIn(targetIndex, bytes.length >= 4 ? bytes[0] : 0, 'phoneme table index');
+  if (bytes.length < 4 || bytes[0] < 1 || bytes[0] > PHONEME_TABLE_LIMIT) throw new RangeError('Invalid phontab table count');
+  const count = bytes[0];
+  const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const recordCounts = new Uint8Array(count);
+  const includesValues = new Uint8Array(count);
+  const recordOffsets = new Uint32Array(count);
+  let cursor = 4;
+  for (let index = 0; index < count; index++) {
+    if (36 > bytes.length - cursor) throw new RangeError('Truncated phontab at byte ' + cursor);
+    recordCounts[index] = bytes[cursor];
+    includesValues[index] = bytes[cursor + 1];
+    recordOffsets[index] = cursor + 36;
+    cursor = recordOffsets[index] + recordCounts[index] * PHONEME_RECORD_BYTES;
+    if (cursor > bytes.length) throw new RangeError('Truncated phontab at byte ' + recordOffsets[index]);
+  }
+
+  const chain = [];
+  const visiting = new Uint8Array(count);
+  let current = targetIndex;
+  while (true) {
+    if (visiting[current] === 1) throw new Error('Phoneme table inheritance cycle');
+    visiting[current] = 1;
+    chain.push(current);
+    const includes = includesValues[current];
+    if (includes === 0) break;
+    if (includes > count) throw new RangeError('Phoneme table parent outside table count');
+    current = includes - 1;
+  }
+
+  const entries = new Array(256).fill(null);
+  let highestCode = 0;
+  let name = '';
+  for (let chainIndex = chain.length - 1; chainIndex >= 0; chainIndex--) {
+    const index = chain[chainIndex];
+    const recordCount = recordCounts[index];
+    const tableCursor = recordOffsets[index];
+    const nameCursor = tableCursor - 32;
+    if (nameCursor < 0 || nameCursor + 32 > bytes.length) throw new RangeError('Truncated phontab name at byte ' + nameCursor);
+    let terminated = false;
+    if (index === targetIndex) {
+      name = '';
+      for (let i = 0; i < 32; i++) {
+        if (bytes[nameCursor + i] === 0) { terminated = true; break; }
+        name += String.fromCharCode(bytes[nameCursor + i]);
+      }
+      if (!terminated) throw new Error('Phoneme table name lacks bounded NUL terminator');
+    } else {
+      terminated = false;
+      for (let i = 0; i < 32; i++) {
+        if (bytes[nameCursor + i] === 0) { terminated = true; break; }
+      }
+      if (!terminated) throw new Error('Phoneme table name lacks bounded NUL terminator');
+    }
+    for (let r = 0; r < recordCount; r++) {
+      const recordCursor = tableCursor + r * PHONEME_RECORD_BYTES;
+      const record = Object.freeze({
+        mnemonic: data.getUint32(recordCursor, true), phflags: data.getUint32(recordCursor + 4, true),
+        program: data.getUint16(recordCursor + 8, true), code: bytes[recordCursor + 10], type: bytes[recordCursor + 11],
+        startType: bytes[recordCursor + 12], endType: bytes[recordCursor + 13], stdLength: bytes[recordCursor + 14], lengthMod: bytes[recordCursor + 15]
+      });
+      entries[record.code] = record;
+      if (record.code > highestCode) highestCode = record.code;
+    }
+  }
+  return Object.freeze({ index: targetIndex, name: name, nPhonemes: highestCode + 1, entries: Object.freeze(entries) });
+}
+
 // Input is a C string of unsigned phoneme codes. The virtual terminal NUL lets
 // dictionary slices omit their terminator without exposing unrelated backing.
 export function decodePhonemes(codes, selectedTable) {

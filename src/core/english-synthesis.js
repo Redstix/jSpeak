@@ -1,10 +1,10 @@
 // Bounded fixed en-us text adapter for M12. Inputs are already verified bytes.
 import { loadDictionary } from './dictionary.js';
 import { createEnglishClauseTranslation } from './translate-clause.js';
-import { createPhonemeTables } from './phoneme-table.js';
+import { selectPhonemeTable } from './phoneme-table.js';
 import { preparePhonemeList, PHONEME_PREPARE_PROFILE } from './phoneme-list-prepare.js';
 import { createPhonemeListMaker } from './make-phoneme-list.js';
-import { createPitchCalculator } from './calc-pitches.js';
+import { createEnglishPitchCalculator } from './calc-pitches-en.js';
 import { createLengthCalculator } from './calc-lengths.js';
 import { createGenerateEventPlanner } from './generate-events.js';
 import { createWaveGenerator } from './wave-generator.js';
@@ -33,11 +33,11 @@ export function createEnglishSynthesizer({ dictionaryBytes, dictionaryManifest, 
   for (const [name, value] of Object.entries(arrays)) {
     if (!(value instanceof Uint8Array)) throw new TypeError('Expected complete ' + name + ' Uint8Array');
   }
-  const table = createPhonemeTables(phontabBytes).select(80);
+  const table = selectPhonemeTable(phontabBytes, 80);
   const dictionary = loadDictionary(dictionaryBytes, dictionaryManifest);
   const eventPlanner = createGenerateEventPlanner(phonindexBytes, table);
   const commandPlanner = createWaveCommandPlanner(phondataBytes, table, { voice: DEFAULT_EN_US_VOICE });
-  const pitchCalculator = createPitchCalculator(table);
+  const pitchCalculator = createEnglishPitchCalculator(table);
   const lengthCalculator = createLengthCalculator(table);
   const phonemeMaker = createPhonemeListMaker(phonindexBytes, table);
   function synthesize(text) {
@@ -71,10 +71,12 @@ export function createEnglishSynthesizer({ dictionaryBytes, dictionaryManifest, 
       const events = eventPlanner.plan(lengthened.list, lengthened.count,
         { list: clause.phonemes.state.embeddedList, clauseStartChar: clause.startCharacter,
           countCharacters: 0, countSentences: 0, clauseStartWord: clause.startWord - 1 });
-      commands.push(...commandPlanner.process(events));
+      const producedCommands = commandPlanner.process(events);
+      for (let index = 0; index < producedCommands.length; index++) commands.push(producedCommands[index]);
     }
-    if (!commands.length) return { commands, sampleCount: 0 };
-    return { commands, voice: DEFAULT_EN_US_VOICE, sampleRate: 22050, clauseCount };
+    const inputBytes = input.length;
+    if (!commands.length) return { commands, sampleCount: 0, inputBytes };
+    return { commands, voice: DEFAULT_EN_US_VOICE, sampleRate: 22050, clauseCount, inputBytes };
   }
 
   function createWav(pcm) {
@@ -94,21 +96,31 @@ export function createEnglishSynthesizer({ dictionaryBytes, dictionaryManifest, 
     const planned = synthesize(text);
     const opts = options || {};
     return new Promise((resolve, reject) => {
-      if (!planned.commands.length) { resolve({ pcm: new Int16Array(0), wav: createWav(new Int16Array(0)), stats: planned }); return; }
-      const commands = planned.commands.map(({ index, ...command }) => ({
-        ...command,
-        b: command.b !== null && typeof command.b === 'number' && (command.type & 0xff) === 9
-          ? { envelope: command.b } : command.b,
-      }));
-      const chunks = [];
+      if (!planned.commands.length) { resolve({ pcm: new Int16Array(0), sampleCount: 0, stats: planned }); return; }
+      const commands = planned.commands;
+      for (let index = 0; index < commands.length; index++) {
+        const command = commands[index];
+        if (command.b !== null && typeof command.b === 'number' && (command.type & 0xff) === 9) {
+          command.b = { envelope: command.b };
+        }
+      }
+      let pcm = new Int16Array(0);
+      let sampleCount = 0;
       const runtime = createBoundedSynthesisRuntime({
-        createCommandSource: () => createArrayCommandSource(commands, { inputBytes: encodeUtf8(text).length, codePoints: text.length, clauses: planned.clauseCount }),
+        createCommandSource: () => createArrayCommandSource(commands, { inputBytes: planned.inputBytes, codePoints: text.length, clauses: planned.clauseCount }),
         createWaveGenerator: () => createWaveGenerator({ voice: DEFAULT_EN_US_VOICE, phondataBytes, randomSeed: 1 }),
         onAudio(chunk) {
-          chunks.push(new Int16Array(chunk.samples));
+          const produced = chunk.samples.length;
+          if (sampleCount + produced > pcm.length) {
+            const grown = new Int16Array(Math.max(produced, pcm.length * 2));
+            grown.set(pcm);
+            pcm = grown;
+          }
+          pcm.set(chunk.samples, sampleCount);
+          sampleCount += produced;
           chunk.release();
         },
-        onEnd(stats) { resolve({ pcm: chunks, stats: { ...stats, clauseCount: planned.clauseCount } }); },
+        onEnd(stats) { resolve({ pcm, sampleCount, stats: { ...stats, clauseCount: planned.clauseCount } }); },
         onError(error) { reject(error); },
         onCancel() { reject(new Error('Synthesis canceled')); },
         scheduler: opts.scheduler || (callback => setTimeout(() => {
@@ -122,12 +134,8 @@ export function createEnglishSynthesizer({ dictionaryBytes, dictionaryManifest, 
 
   async function synthesizeWav(text, options) {
     const result = await synthesizePcm(text, options);
-    let sampleCount = 0;
-    for (const chunk of result.pcm) sampleCount += chunk.length;
-    const pcm = new Int16Array(sampleCount);
-    let offset = 0;
-    for (const chunk of result.pcm) { pcm.set(chunk, offset); offset += chunk.length; }
-    result.pcm = pcm; result.wav = createWav(pcm);
+    result.pcm = result.pcm.subarray(0, result.sampleCount);
+    result.wav = createWav(result.pcm);
     return result;
   }
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPhonemeTables, decodePhonemes } from '../src/core/phoneme-table.js';
+import { createPhonemeTables, decodePhonemes, selectPhonemeTable } from '../src/core/phoneme-table.js';
 
 function fixture(tables) {
   const bytes = new Uint8Array(4 + tables.reduce((sum, table) => sum + 36 + table.records.length * 16, 0));
@@ -54,6 +54,23 @@ test('phontab parser rejects bounded-read violations, invalid parents and cycles
   assert.throws(() => createPhonemeTables([]), TypeError);
   const tables = createPhonemeTables(valid);
   for (const index of [-1, 0.5, 1, NaN]) assert.throws(() => tables.select(index), RangeError);
+});
+
+test('selected phoneme table parser matches the complete parser without loading unused tables', () => {
+  const bytes = fixture([
+    { records: [{ code: 3, mnemonic: 65 }] },
+    { includes: 1, records: [{ code: 5, mnemonic: 66 }] },
+    { includes: 2, records: [{ code: 3, mnemonic: 67 }] },
+    { records: [{ code: 255, mnemonic: 68 }] }
+  ]);
+  const single = fixture([{ records: [{ code: 1, mnemonic: 65 }] }]);
+  assert.deepEqual(selectPhonemeTable(bytes, 2), createPhonemeTables(bytes).select(2));
+  assert.deepEqual(selectPhonemeTable(bytes, 3), createPhonemeTables(bytes).select(3));
+  assert.throws(() => selectPhonemeTable(bytes, -1), RangeError);
+  assert.throws(() => selectPhonemeTable(bytes, 4), RangeError);
+  assert.throws(() => selectPhonemeTable(fixture([{ includes: 1, records: [] }]), 0), /cycle/);
+  assert.throws(() => selectPhonemeTable(fixture([{ includes: 2, records: [] }]), 0), /parent/);
+  assert.throws(() => selectPhonemeTable(single.slice(0, 39), 0), /Truncated/);
 });
 
 test('DecodePhonemes retains stress special cases, program exceptions, holes and byte terminators', () => {

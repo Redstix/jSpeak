@@ -10,9 +10,9 @@ import {
 
 test('Vela TTS profile manifests define distinct install identities', () => {
   const expected = {
-    a: { versionName: '0.5.1-a', versionCode: 8, runtime: 'full-js-synthesis' },
-    b: { versionName: '0.5.1-b', versionCode: 9, runtime: 'precomputed-playback', sampleRate: 11025 },
-    c: { versionName: '0.5.1-c', versionCode: 10, runtime: 'precomputed-playback', sampleRate: 5512 }
+    a: { versionName: '0.5.2-a', versionCode: 11, runtime: 'full-js-synthesis' },
+    b: { versionName: '0.5.2-b', versionCode: 12, runtime: 'precomputed-playback', sampleRate: 11025 },
+    c: { versionName: '0.5.2-c', versionCode: 13, runtime: 'precomputed-playback', sampleRate: 5512 }
   };
   for (const [variant, row] of Object.entries(expected)) {
     const manifest = JSON.parse(readFileSync(new URL(`../apps/vela-tts/profiles/${variant}/manifest.json`, import.meta.url)));
