@@ -46,6 +46,7 @@
 - M11有界命令→PCM运行时已完成：170命令窗口、4096样本chunk、最多4块在途PCM（32768B）、输入65536B/code point 16384/clause 256/中间命令100000显式上限；慢消费backpressure、1秒/30秒、5001命令长流、取消重启、资源回收和100次会话无串扰通过。接入运行时后M10全量仍67/67 exact。见[M11验收](build-results/2026-10-10-m11-bounded-runtime.md)。
 - M12 Vela适配已产出可安装测试RPK：固定`Hello world.`连接候选数据、JS文本→命令→有界PCM→完整WAV、internal写读和`@system.audio`播放，页面生命周期有取消入口。RPK静态/解包校验通过，见[0.5.0构建记录](build-results/2026-10-11-tts-0.5.0.md)。但集成文本→命令路径未达到C/JS PCM exact（JS 22809样本，C 23190样本，首个差异1384），真机播放、听感、前后台与清理待用户验收；M12不可标记完成。
 - M14启动资源优化已在`perf/quickjs-vela-optimization`产出0.5.1 A/B/C三档：A保留完整JS合成并把启动解析从0.5.0的1731654B降至361297B；B/C为11025Hz/5512Hz预计算播放档，启动解析约4.7KB且无JS文件I/O。`npm test` 278/278、数据校验与三档静态校验通过，见[0.5.1 profiles构建](build-results/2026-10-11-tts-0.5.1-profiles.md)。源码审计证实0.5.0启动不读数据，898009B只在点击后读取；启动闪退根因仍待真机A/B判定，M14/S1完整验收未完成。
+- M14续作已产出0.5.2 A/B/C：在A档22050Hz/PCM16输出SHA256不变的前提下，启动解析361297B→360630B、RPK 630242B→629948B、phontab初始化记录对象3686→190；首次点击整读898009B未变。`npm test` 279/279、数据校验与受影响差分（CalcPitches/MakePhonemeList/Prosody/GenerateEvents/cmn tone/Wavegen full逐点exact）通过，见[0.5.2 QuickJS优化构建](build-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)。目标运行引擎按用户告知为QuickJS；固件/QuickJS版本与设备heap仍未知，0.5.2三档待真机验收。
 
 
 - M15数据/profile候选已完成：`cmn`与`en-us`并存且可独立选择；独立原始数据包2,295,161B、`cmn_list/cmn_rules/cmn_emoji`源输入锁、29例exact phoneme/PCM差分、tone token与1例动态en词典缺口均记录。复现命令为`npm run language:cmn:build/verify`，见[Mandarin](MANDARIN_SUPPORT.md)。该结果只证明C数据依赖候选，不证明QuickJS/Vela运行时。

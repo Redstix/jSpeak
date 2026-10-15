@@ -51,8 +51,8 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 | 工作树 | 干净，无未提交改动 |
 | 分支拓扑 | `perf/...` = `work/bootstrap`(`576c5d0`) + 2 个 M14 提交（`0` 左 `2` 右，即 work/bootstrap 无独有提交）；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 是历史存档 |
 | 流水线 | **已停止**。最后一个 jSpeak codex 会话结束于 2026-10-11 11:38；10-12/13/14 无 jSpeak 会话、无提交 |
-| 阻塞门 | 0.5.1 A/B/C 真机验收（只有用户能关，见 §4） |
-| 已就绪产物 | 0.5.1 三档 RPK 在本机 `apps/vela-tts/dist/`（gitignore，需重建），身份见 §6 |
+| 阻塞门 | 0.5.2 A/B/C 真机验收（只有用户能关，见 §4） |
+| 已就绪产物 | 0.5.2 三档 RPK 在本机 `apps/vela-tts/dist/`（gitignore，需重建），身份见 §6 |
 
 流水线为什么静默停下：本机的「jSpeak 流水线看门狗」cron 任务已不在 cron 表中，而 Codex 阶段的 report 文件写在 `~/.hermes/cache/scratch/` —— 该目录 **idle 24h 即被 prune**，report 会一并消失。看门狗已不在、report 又留不住，整条链停了三天没有任何一处能报出来。已写进 [STATUS](STATUS.md) 未完成项：**持久产物不要放 scratch**。
 
@@ -69,9 +69,9 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 
 ## 4. 设备门（只有用户能关，agent 不得代宣）
 
-- **0.5.1 A/B/C 待验收**：判定 0.5.0「启动闪退 / 手表重启」根因，并给出音质/资源取舍档。
+- **0.5.2 A/B/C 待验收**：判定 0.5.0「启动闪退 / 手表重启」根因，并给出音质/资源取舍档。
   建议顺序：先复现 0.5.0 闪退作对照 → 按 A→B→C 安装，每档**只打开核对页头、不点击**，确认是否闪退后再做动作验收。
-  回报模板与逐项字段见 [0.5.1 设备待验收](device-results/2026-10-11-tts-0.5.1-profiles.md)（A 档含数据/合成/写入/读回/播放/听感/清理；B/C 只测启动与播放）。
+  回报模板与逐项字段见 [0.5.2 设备待验收](device-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)（A 档含数据/合成/写入/读回/播放/听感/清理；B/C 只测启动与播放）。
 - 0.5.0 亦有待验收记录：[设备](device-results/2026-10-11-tts-0.5.0.md)、[构建](build-results/2026-10-11-tts-0.5.0.md)。
 - 纪律：**真机听感与"启动不再闪退"只能由用户确认**；构建与静态校验通过一律写「待用户真机验收」。`onended` 只证明播放事件，不证明听感。
 
@@ -103,12 +103,12 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 | probe 0.4.1 RPK SHA256 | `22353261d791b03eaf34283b03a1757cb77cc162c742842b57fe1ab1d2446604` |
 | 探针 hash | PROBE_BIN=259309834；TEST_TXT=975296040；SLICE=1037292089；BIG_TXT=534463728 |
 | 性能观察，非 TTS RTF | 64KiB 读+hash 454ms；256KiB 2048ms；2KiB 切片 129ms；计算 maxSlice 4ms；双音生成 534ms，maxSlice 77ms 未定位 |
-| **0.5.1-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.1-a.rpk`，630242 B，解包 1316326 B，SHA256 `3eb4f87de58685eda4080f7bf802531f5bdd5118768b71b83d7807970c2977b0`，戳 `B261011T112426`，代码 `b5c40a5` |
-| **0.5.1-B** | `...0.5.1-b.rpk`，44621 B，解包 84334 B，SHA256 `24f8cc0ba2867115a3b25d187a6db131fe04c04cb4d352a46fa5368661cf7b0e`，11025Hz 预计算档 |
-| **0.5.1-C** | `...0.5.1-c.rpk`，37810 B，解包 72940 B，SHA256 `a06f0cc7a14da0b8f9a967c4b5ab383c2ed82333af0302fc1d7b807dd2a32a37`，5512Hz 预计算档 |
+| **0.5.2-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.2-a.rpk`，629948 B，解包 1315658 B，SHA256 `7a9ec2e090e37a6b2b52863abb0851a6a3bbaac31d7b7102374c82ec1cffc773`，戳 `B261015T045913`，构建代码 `c37504c` |
+| **0.5.2-B** | `...0.5.2-b.rpk`，44623 B，解包 84341 B，SHA256 `4dbc588ceb6c7e6de7e24dfbcfdec88bfb0dd98daebc7afe731263d62d2578ae`，11025Hz 预计算档 |
+| **0.5.2-C** | `...0.5.2-c.rpk`，37814 B，解包 72939 B，SHA256 `8fcfe3ff231d0f333b0961227bb9f0d88ee6c071ca4f3bfb9e888617d0d843c7`，5512Hz 预计算档 |
 | 0.5.0 RPK | 781367 B，解包 2971643 B；启动解析 JS 1731654 B（闪退待判定的对照物） |
 
-三档音质/资源逐项量化差异、各项优化前后数据、Node 合成基准见 [0.5.1 profiles 构建记录](build-results/2026-10-11-tts-0.5.1-profiles.md)。
+三档音质/资源逐项量化差异、各项优化前后数据、Node 合成基准见 [0.5.2 QuickJS 优化构建记录](build-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)；0.5.1 历史记录保留在 [0.5.1 profiles 构建记录](build-results/2026-10-11-tts-0.5.1-profiles.md)。
 
 历史 copy 失败后的"301 leftover"是措辞瑕疵：目标不存在，无残留。这不改变 copy 路线关闭的结论，也无需为已关闭的路线单独重发探针。
 
