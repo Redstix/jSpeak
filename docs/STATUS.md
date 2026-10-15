@@ -1,6 +1,15 @@
-# Implementation status — 2026-10-14
+# Implementation status — 2026-10-15
 
 执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile与CalcPitches_Tone切片已落地：数据差分29 exact/1 unsupported，tone差分13/13 exact；cmn完整JS前端和真机中文出声未完成。
+
+## 2026-10-15 本轮核查（实测，非文档推断）
+
+- 权威分支 `perf/quickjs-vela-optimization`，运行时优化源码提交 `7ad0705`；起始工作树干净，已复核 `6140c24` 及此前 0.5.2 记录。
+- M14续作已完成 A 档合成内环低损优化：直接执行 int32 包装等价算术、缓存当前谱表/固定常量并内联 PCM16 映射；未改 DSP 数值、随机状态、命令顺序或输出缓冲。
+- Node 成对代理（5轮×每轮25次，基线`6140c24` vs 候选`7ad0705`）：合成 median 43.188ms→31.212ms，RTF median 0.041751→0.030174，均 -27.73%；A 档 WAV SHA256 保持 `fc94cec17a566cdc2fe06be15b0df4b227406c05646b0343f0b5f6e1008ea6d1`。
+- 0.5.3 A/B/C 已从运行时提交重建：A 630005B / SHA256 `2359f7f7…1340e` / 启动解析 360724B；B/C 44626B / 37811B。`profiles.json` 构建 commit 为 `7ad070548496ee8bd4f5de47e2fd5fb524e26477`。
+- 代价如实记录：0.5.3-A 启动解析较 0.5.2-A +94B，RPK +57B，首次点击整读 898009B 未变。设备 CPU/heap 不可测/未知，不能把 Node 代理写成设备收益比例。
+- `npm test` 279/279、0 fail、0 skip；`data:verify` 通过；CalcPitches/MakePhonemeList/Prosody/GenerateEvents/cmn tone/Wavegen pause/wave/full 全部 exact。0.5.3 三档待用户真机验收。
 
 ## 2026-10-14 交接核查（实测，非文档推断）
 
@@ -47,6 +56,7 @@
 - M12 Vela适配已产出可安装测试RPK：固定`Hello world.`连接候选数据、JS文本→命令→有界PCM→完整WAV、internal写读和`@system.audio`播放，页面生命周期有取消入口。RPK静态/解包校验通过，见[0.5.0构建记录](build-results/2026-10-11-tts-0.5.0.md)。但集成文本→命令路径未达到C/JS PCM exact（JS 22809样本，C 23190样本，首个差异1384），真机播放、听感、前后台与清理待用户验收；M12不可标记完成。
 - M14启动资源优化已在`perf/quickjs-vela-optimization`产出0.5.1 A/B/C三档：A保留完整JS合成并把启动解析从0.5.0的1731654B降至361297B；B/C为11025Hz/5512Hz预计算播放档，启动解析约4.7KB且无JS文件I/O。`npm test` 278/278、数据校验与三档静态校验通过，见[0.5.1 profiles构建](build-results/2026-10-11-tts-0.5.1-profiles.md)。源码审计证实0.5.0启动不读数据，898009B只在点击后读取；启动闪退根因仍待真机A/B判定，M14/S1完整验收未完成。
 - M14续作已产出0.5.2 A/B/C：在A档22050Hz/PCM16输出SHA256不变的前提下，启动解析361297B→360630B、RPK 630242B→629948B、phontab初始化记录对象3686→190；首次点击整读898009B未变。`npm test` 279/279、数据校验与受影响差分（CalcPitches/MakePhonemeList/Prosody/GenerateEvents/cmn tone/Wavegen full逐点exact）通过，见[0.5.2 QuickJS优化构建](build-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)。目标运行引擎按用户告知为QuickJS；固件/QuickJS版本与设备heap仍未知，0.5.2三档待真机验收。
+- M14合成CPU续作已产出0.5.3 A/B/C：A档Node成对代理合成median -27.73%、输出逐位不变；启动解析以+94B换取运行期调用/寻址减少。全部指定差分与 `npm test` 通过，见[0.5.3合成CPU构建](build-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)与[0.5.3设备待验收](device-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)。
 
 
 - M15数据/profile候选已完成：`cmn`与`en-us`并存且可独立选择；独立原始数据包2,295,161B、`cmn_list/cmn_rules/cmn_emoji`源输入锁、29例exact phoneme/PCM差分、tone token与1例动态en词典缺口均记录。复现命令为`npm run language:cmn:build/verify`，见[Mandarin](MANDARIN_SUPPORT.md)。该结果只证明C数据依赖候选，不证明QuickJS/Vela运行时。
@@ -81,11 +91,11 @@
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
 - 交接与运维纪律：无人值守链的脚本与 report 必须放持久目录（`~/.hermes/scripts/`）；放 `~/.hermes/cache/scratch/` 会被 24h prune 清掉——2026-10-11 之后整条链停摆三天无人发现，直接原因就是「看门狗 cron 已丢失 + report 落在 scratch」。
 - 交接只交仓库内产物：`dist/`、`build/`、`artifacts/`、`upstream/`、`node_modules/` 全部 gitignore；新机器 clone 后必须按 [HANDOVER](HANDOVER.md) §0 重建（C Oracle、apps 依赖、三档 RPK），重建会得到新的可见构建戳，身份以文档记录的 SHA256 为准。
-- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13数据最小化未开始；M14仅完成本轮启动解析/打包减法，设备启动、heap、RTF、S1稳定性与最终预算未验收。
+- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13数据最小化未开始；M14已完成0.5.2启动解析/打包减法与0.5.3 Node代理合成CPU低损优化，但设备启动、heap、RTF、S1稳定性与最终预算仍未验收。
 
 ## 下一步
 
-0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、三档 RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。
+0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、三档 RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。0.5.3 A/B/C 的真机启动、播放与听感仍待用户验收。
 1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle（当前 JS 22809 样本 vs C 23190，首个差异样本 1384）；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
 3. M13数据最小化（未开始）、M14设备资源/RTF证据与S1稳定性、M16维护演练纳入首发。M15完整JS/真机验收继续单列跟踪。

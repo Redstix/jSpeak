@@ -1,8 +1,8 @@
-# jSpeak 交接入口 — 2026-10-14 修订版
+# jSpeak 交接入口 — 2026-10-15 修订版
 
 本仓库正在进行 eSpeak NG 纯 JS 行为兼容移植，目标为 Redmi Watch 5 的 Xiaomi Vela JS 应用。**正式执行基线是 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)**；本文件只保存恢复顺序和操作要点。
 
-**本次交接（2026-10-14）**：另一台机器上的另一个 agent 接手，方式是 `git clone` 后在本地继续。交接时点核实结论：无人值守流水线已停止，最后一站在 **2026-10-11 11:38** 结束；此后（10-12 起）无任何 codex 会话、无新提交；工作树干净，全部分支已 push。接手前先读 §0 与 §2。
+**本次交接（2026-10-15）**：当前 agent 已复核 0.5.2 交接、完成 0.5.3 合成内环低损优化并重建三档 RPK。此前 2026-10-14 已核实无人值守流水线停止、最后一站在 **2026-10-11 11:38** 结束；该历史结论保留，不作为当前性能证据。
 
 ## 0. 在另一台机器上继续（clone 后先做这些）
 
@@ -24,7 +24,7 @@ npm run oracle:build            # 按 upstream.json 自动 clone 上游并 detac
 npm ci --prefix apps/vela-probe --registry=https://registry.npmjs.org
 npm ci --prefix apps/vela-tts   --registry=https://registry.npmjs.org
 npm test                        # 集成测试；pretest 会重生成 stamp/assets（都是 gitignore 产物）
-npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没有任何现成 RPK）
+npm run tts:profiles            # 重建 0.5.3 A/B/C 三档 RPK（clone 后没有任何现成 RPK）
 ```
 
 交接时点（2026-10-14）在本机跑出的基线，供新机对照：`npm test` **278/278 通过、0 fail、0 skip**（约 30.8s，Node v24.21.0）；测试覆盖数与 STATUS 记录一致，说明 clone 后的仓库自带语料足以跑通集成测试（`artifacts/` 类前置只影响 `compare` 系列差分入口，按 §7 末条先跑对应 `oracle:*:build`）。
@@ -43,16 +43,16 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 
 原 ZIP、阶段 DESIGN 和 `design/speak-patch.md` 是历史设计/评审材料，角色与冲突处理见最终计划 §1；不以历史材料中的示意函数名当成已核验源码映射。
 
-## 2. 交接时点状态（2026-10-14 02:37 UTC 实测核实）
+## 2. 交接时点状态（2026-10-15 09:30 UTC 实测核实）
 
 | 项 | 事实 |
 |---|---|
-| 权威分支 / HEAD | `perf/quickjs-vela-optimization` @ `9fbbe75`（已 push，与 origin 同步） |
-| 工作树 | 干净，无未提交改动 |
-| 分支拓扑 | `perf/...` = `work/bootstrap`(`576c5d0`) + 2 个 M14 提交（`0` 左 `2` 右，即 work/bootstrap 无独有提交）；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 是历史存档 |
+| 权威分支 | `perf/quickjs-vela-optimization`；0.5.3 运行时代码与 profiles 构建提交为 `7ad070548496ee8bd4f5de47e2fd5fb524e26477` |
+| 工作树 | 本轮文档提交后应干净；`dist/` 为 gitignore，须按 §0 重建 |
+| 分支拓扑 | `perf/...` 在 `work/bootstrap`(`576c5d0`) 之后持续追加 M14 提交；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 是历史存档 |
 | 流水线 | **已停止**。最后一个 jSpeak codex 会话结束于 2026-10-11 11:38；10-12/13/14 无 jSpeak 会话、无提交 |
-| 阻塞门 | 0.5.2 A/B/C 真机验收（只有用户能关，见 §4） |
-| 已就绪产物 | 0.5.2 三档 RPK 在本机 `apps/vela-tts/dist/`（gitignore，需重建），身份见 §6 |
+| 阻塞门 | 0.5.3 A/B/C 真机验收（只有用户能关，见 §4） |
+| 已就绪产物 | 0.5.3 三档 RPK 在本机 `apps/vela-tts/dist/`（gitignore，需重建），身份见 §6 |
 
 流水线为什么静默停下：本机的「jSpeak 流水线看门狗」cron 任务已不在 cron 表中，而 Codex 阶段的 report 文件写在 `~/.hermes/cache/scratch/` —— 该目录 **idle 24h 即被 prune**，report 会一并消失。看门狗已不在、report 又留不住，整条链停了三天没有任何一处能报出来。已写进 [STATUS](STATUS.md) 未完成项：**持久产物不要放 scratch**。
 
@@ -63,15 +63,15 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 1. **M12 收口**：集成文本→命令计划尚未与 C Oracle 对齐（JS 22809 样本 vs C 23190，首个差异在样本 1384）。英文端到端做到 C/JS exact 才算 M12 完成。
 2. **M13 数据最小化**：尚未开始。按完整依赖关系裁剪、冻结生产格式与构建 profile，须给出裁剪前后目标语料 trace/PCM 不变。
 3. **M15 剩余**：`cmn` 前端仍未实现 —— `TranslateClause`、ideograph/tone tokenizer、`MakePhonemeList`/`Generate`/`Wavegen` 参数化、端到端 C/JS exact。已落地的是数据/profile 与 `CalcPitches_Tone` 函数级切片，**不等于中文可用**。用户 2026-10-11 已明确 M15 不再延期（以 STATUS 为准，最终计划里的"延期"措辞是旧的）。
-4. **M14/S1 完整验收**：本轮只做了启动解析/打包减法；设备启动、heap、RTF、稳定性仍未验收。
+4. **M14/S1 完整验收**：0.5.3 已完成 A 档合成内环低损优化（Node 成对代理合成 median -27.73%，输出逐位不变）；设备启动、heap、RTF、稳定性仍未验收。进一步算法优化必须先证明 int32/舍入/resume 等价并有前后基准。
 5. **M16 维护演练**：隔离环境跑通上游同步流程并输出差异/资源报告，不能只有说明文档。
 6. 基础设施：若新机继续无人值守，重建看门狗 + 把 report 落盘位置移到 scratch **之外**（§2 那个教训的直接修复）。
 
 ## 4. 设备门（只有用户能关，agent 不得代宣）
 
-- **0.5.2 A/B/C 待验收**：判定 0.5.0「启动闪退 / 手表重启」根因，并给出音质/资源取舍档。
+- **0.5.3 A/B/C 待验收**：判定 0.5.0「启动闪退 / 手表重启」根因，并给出音质/资源取舍档。
   建议顺序：先复现 0.5.0 闪退作对照 → 按 A→B→C 安装，每档**只打开核对页头、不点击**，确认是否闪退后再做动作验收。
-  回报模板与逐项字段见 [0.5.2 设备待验收](device-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)（A 档含数据/合成/写入/读回/播放/听感/清理；B/C 只测启动与播放）。
+  回报模板与逐项字段见 [0.5.3 设备待验收](device-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)（A 档含数据/合成/写入/读回/播放/听感/清理；B/C 只测启动与播放）。
 - 0.5.0 亦有待验收记录：[设备](device-results/2026-10-11-tts-0.5.0.md)、[构建](build-results/2026-10-11-tts-0.5.0.md)。
 - 纪律：**真机听感与"启动不再闪退"只能由用户确认**；构建与静态校验通过一律写「待用户真机验收」。`onended` 只证明播放事件，不证明听感。
 
@@ -106,9 +106,12 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 | **0.5.2-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.2-a.rpk`，629948 B，解包 1315658 B，SHA256 `7a9ec2e090e37a6b2b52863abb0851a6a3bbaac31d7b7102374c82ec1cffc773`，戳 `B261015T045913`，构建代码 `c37504c` |
 | **0.5.2-B** | `...0.5.2-b.rpk`，44623 B，解包 84341 B，SHA256 `4dbc588ceb6c7e6de7e24dfbcfdec88bfb0dd98daebc7afe731263d62d2578ae`，11025Hz 预计算档 |
 | **0.5.2-C** | `...0.5.2-c.rpk`，37814 B，解包 72939 B，SHA256 `8fcfe3ff231d0f333b0961227bb9f0d88ee6c071ca4f3bfb9e888617d0d843c7`，5512Hz 预计算档 |
+| **0.5.3-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.3-a.rpk`，630005 B，解包 1315752 B，SHA256 `2359f7f7ab853cba35df2d4a70db61a6072cb40d27a45b438844c1101001340e`，戳 `B261015T092946`，构建代码 `7ad0705` |
+| **0.5.3-B** | `...0.5.3-b.rpk`，44626 B，解包 84340 B，SHA256 `05ba8eb06d6eff54fffd171a62a56cd973d39ef9979fa2e7021982cf8e62286e`，11025Hz 预计算档 |
+| **0.5.3-C** | `...0.5.3-c.rpk`，37811 B，解包 72941 B，SHA256 `140e8a2a1bba0ec7549338bed6e2c7cd7cdfd86987659b24835073f9b4235e66`，5512Hz 预计算档 |
 | 0.5.0 RPK | 781367 B，解包 2971643 B；启动解析 JS 1731654 B（闪退待判定的对照物） |
 
-三档音质/资源逐项量化差异、各项优化前后数据、Node 合成基准见 [0.5.2 QuickJS 优化构建记录](build-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)；0.5.1 历史记录保留在 [0.5.1 profiles 构建记录](build-results/2026-10-11-tts-0.5.1-profiles.md)。
+三档音质/资源逐项量化差异、各项优化前后数据、Node 合成基准见 [0.5.3 合成 CPU 优化构建记录](build-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)；0.5.1/0.5.2 历史记录保留在 `docs/build-results/`。
 
 历史 copy 失败后的"301 leftover"是措辞瑕疵：目标不存在，无残留。这不改变 copy 路线关闭的结论，也无需为已关闭的路线单独重发探针。
 
@@ -117,7 +120,7 @@ npm run tts:profiles            # 重建 0.5.1 A/B/C 三档 RPK（clone 后没�
 - `npm test`：Node 集成测试；pretest 会生成 stamp/assets。构建后复测可用 `node --test tests/*.test.mjs` 避免改变交付 stamp。
 - `npm run oracle:build`：构建固定参考程序；`npm run test:oracle`：C 自身重复性检查（**不是** C/JS 兼容测试）。
 - `npm run probe:build`：构建探针（`data:build` + assets + aiot build），产物在 `apps/vela-probe/dist/`。
-- `npm run tts:profiles`：构建 0.5.1 A/B/C 三档 TTS 包，产物在 `apps/vela-tts/dist/`。
+- `npm run tts:profiles`：构建 0.5.3 A/B/C 三档 TTS 包，产物在 `apps/vela-tts/dist/`。
 - `npm run oracle:trace:build` / `npm run test:oracle:trace`：隔离插桩构建与 C 对照；`npm run data:verify` 校验候选数据；`npm run probe:source` 生成实际源代码交付副本（离线恢复用）。
 - `npm run oracle:unicode:build` / `npm run test:oracle:unicode` / `npm run unicode:build` / `npm run test:unicode`：M01 全码点 C/JS 差分。
 - `npm run oracle:clause:build` / `npm run test:clause`：独立 C ReadClause 参考与固定 profile 差分（例外绑定输入和签名，新例外须审查）；`npm run clause:properties:build` / `npm run test:clause:properties`：全码点原始属性差分。
