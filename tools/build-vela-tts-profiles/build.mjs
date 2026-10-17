@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -11,32 +12,59 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEnglishSynthesizer } from '../../src/core/english-synthesis.js';
+import { createCmnSynthesizer } from '../../src/core/cmn-synthesis.js';
+import { CMN_DICTIONARY_MANIFEST } from '../../data/cmn/synthesis-profile.js';
 import { benchmarkVelaStartup } from '../../tools/perf/vela-startup-benchmark.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const APP = path.join(ROOT, 'apps/vela-tts');
-const SOURCE_DATA = path.join(ROOT, 'apps/vela-probe/src/common/espeak');
+const EN_SOURCE_DATA = path.join(ROOT, 'apps/vela-probe/src/common/espeak');
+const CMN_SOURCE_DATA = path.join(ROOT, 'artifacts/cmn-language-pack');
 const DIST = path.join(APP, 'dist');
-const RUNTIME_DATA = [
-  'en_dict.txt',
-  'intonations.txt',
-  'lang__gmw__en-US.txt',
-  'phondata.txt',
-  'phonindex.txt',
-  'phontab.txt'
+const PAGE_SOURCE = path.join(APP, 'profiles/a/page.ux');
+const EN_MANIFEST_SOURCE = path.join(APP, 'profiles/a/manifest.json');
+const SRC_MANIFEST = path.join(APP, 'src/manifest.json');
+
+const PROFILES = [
+  {
+    id: 'en',
+    language: 'en-us',
+    profileDir: 'a',
+    sourceData: EN_SOURCE_DATA,
+    packManifest: path.join(EN_SOURCE_DATA, 'manifest.json'),
+    dictionaryManifest: JSON.parse(readFileSync(new URL('../../data/dictionary/manifest.json', import.meta.url))),
+    testText: 'Hello world.',
+    listeningNote: 'UNVERIFIED；请记录是否清晰英文'
+  },
+  {
+    id: 'cmn',
+    language: 'cmn',
+    profileDir: 'cmn',
+    sourceData: CMN_SOURCE_DATA,
+    packManifest: path.join(CMN_SOURCE_DATA, 'manifest.json'),
+    dictionaryManifest: CMN_DICTIONARY_MANIFEST,
+    testText: '你好，世界。',
+    listeningNote: 'UNVERIFIED；请记录是否清晰普通话音节与声调'
+  }
 ];
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function readData(name) {
-  return new Uint8Array(readFileSync(path.join(SOURCE_DATA, name)));
+function readPack(profile) {
+  const manifest = JSON.parse(readFileSync(profile.packManifest, 'utf8'));
+  if (!Array.isArray(manifest.files) || !manifest.files.length) throw new Error('Pack has no runtime files: ' + profile.packManifest);
+  return manifest;
 }
 
-function text(bytes) {
-  return Buffer.from(bytes).toString('ascii');
+function dictionaryFile(pack) {
+  const file = pack.files.find(entry => entry.id.endsWith('_dict'));
+  if (!file) throw new Error('Pack has no dictionary file');
+  return file;
 }
+
+/** @typedef {{ samples: Int16Array, sampleRate: number, channels: number, bitsPerSample: number }} PcmWav */
 
 export function parsePcmWav(bytes) {
   if (bytes.length < 44 || text(bytes.subarray(0, 4)) !== 'RIFF' ||
@@ -69,28 +97,71 @@ export function makePcmWav(samples, sampleRate) {
   return bytes;
 }
 
-async function generateReferenceAudio() {
-  const dictionaryManifest = JSON.parse(readFileSync(new URL('../../data/dictionary/manifest.json', import.meta.url)));
-  const synthesizer = createEnglishSynthesizer({
-    dictionaryBytes: readData('en_dict.txt'),
-    dictionaryManifest,
-    phontabBytes: readData('phontab.txt'),
-    phonindexBytes: readData('phonindex.txt'),
-    phondataBytes: readData('phondata.txt')
-  });
-  const result = await synthesizer.synthesizeWav('Hello world.', {
-    scheduler(callback) { callback(); }
-  });
-  return { bytes: result.wav, sampleCount: result.pcm.length, commandCount: result.stats.producedCommands };
+function text(bytes) {
+  return Buffer.from(bytes).toString('ascii');
 }
 
-function stageProfile() {
+function readData(profile, name) {
+  return new Uint8Array(readFileSync(path.join(profile.sourceData, name)));
+}
+
+async function generateReferenceAudio(profile, pack) {
+  const dictionary = dictionaryFile(pack);
+  const data = {
+    dictionaryBytes: readData(profile, dictionary.packagePath),
+    phontabBytes: readData(profile, pack.files.find(file => file.id === 'phontab').packagePath),
+    phonindexBytes: readData(profile, pack.files.find(file => file.id === 'phonindex').packagePath),
+    phondataBytes: readData(profile, pack.files.find(file => file.id === 'phondata').packagePath)
+  };
+  const synthesizer = profile.language === 'cmn'
+    ? createCmnSynthesizer(data)
+    : createEnglishSynthesizer({ ...data, dictionaryManifest: profile.dictionaryManifest });
+  const result = await synthesizer.synthesizeWav(profile.testText, {
+    scheduler(callback) { callback(); }
+  });
+  if (profile.language === 'cmn') {
+    const expected = pack.audio?.sha256;
+    const actual = sha256(result.wav);
+    if (!expected || actual !== expected) {
+      throw new Error('cmn JS reference does not match the reviewed C oracle: ' + actual);
+    }
+  }
+  return {
+    bytes: result.wav,
+    sampleCount: result.pcm.length,
+    commandCount: result.stats.producedCommands,
+    sha256: sha256(result.wav)
+  };
+}
+
+function dataAssetsModule(profile, pack, stamp) {
+  const dictionary = dictionaryFile(pack);
+  const assets = {
+    ...pack,
+    language: profile.language,
+    versionName: JSON.parse(readFileSync(path.join(APP, 'profiles', profile.profileDir, 'manifest.json'))).versionName,
+    buildStamp: stamp,
+    testText: profile.testText,
+    listeningNote: profile.listeningNote,
+    dictionaryId: dictionary.id,
+    dictionaryManifest: profile.dictionaryManifest,
+    dataFileCount: pack.files.length
+  };
+  return '// Generated by tools/build-vela-tts-profiles/build.mjs; do not edit.\n' +
+    'export var DATA_ASSETS = ' + JSON.stringify(assets, null, 2) + ';\n';
+}
+
+function stageProfile(profile, pack, stamp) {
   mkdirSync(path.join(APP, 'src/pages/index'), { recursive: true });
-  copyFileSync(path.join(APP, 'profiles/a/manifest.json'), path.join(APP, 'src/manifest.json'));
-  copyFileSync(path.join(APP, 'profiles/a/page.ux'), path.join(APP, 'src/pages/index/index.ux'));
+  copyFileSync(path.join(APP, 'profiles', profile.profileDir, 'manifest.json'), SRC_MANIFEST);
+  copyFileSync(PAGE_SOURCE, path.join(APP, 'src/pages/index/index.ux'));
   rmSync(path.join(APP, 'src/common/espeak'), { recursive: true, force: true });
   mkdirSync(path.join(APP, 'src/common/espeak'), { recursive: true });
-  for (const name of RUNTIME_DATA) copyFileSync(path.join(SOURCE_DATA, name), path.join(APP, 'src/common/espeak', name));
+  for (const entry of pack.files) {
+    copyFileSync(path.join(profile.sourceData, entry.packagePath),
+      path.join(APP, 'src/common/espeak', entry.packagePath));
+  }
+  writeFileSync(path.join(APP, 'src/data-assets.js'), dataAssetsModule(profile, pack, stamp));
 }
 
 function expectedRpkName(manifest) {
@@ -102,12 +173,9 @@ function buildRpk() {
   execFileSync(path.join(APP, 'node_modules/.bin/aiot'), ['build', '--devtool', 'false'], {
     cwd: APP, stdio: 'inherit'
   });
-  const manifest = JSON.parse(readFileSync(path.join(APP, 'src/manifest.json')));
+  const manifest = JSON.parse(readFileSync(SRC_MANIFEST));
   const expected = path.join(DIST, expectedRpkName(manifest));
-  const actual = readdirSync(DIST).find(name => name.endsWith('.rpk'));
-  if (!actual || path.join(DIST, actual) !== expected) {
-    throw new Error(`Expected ${expected}, found ${actual || 'no RPK'}`);
-  }
+  if (!existsSync(expected)) throw new Error(`Expected ${expected}, not produced`);
   return expected;
 }
 
@@ -116,85 +184,162 @@ function zipNames(rpk) {
 }
 
 function readZip(rpk, name) {
-  return execFileSync('unzip', ['-p', rpk, name], { maxBuffer: 16 * 1024 * 1024 });
+  return execFileSync('unzip', ['-p', rpk, name], { maxBuffer: 32 * 1024 * 1024 });
 }
 
-function validateRpk(rpk, stamp, versionName) {
+function validateRpk(rpk, stamp, profile, pack) {
   const manifest = JSON.parse(readZip(rpk, 'manifest.json'));
+  const expectedManifest = JSON.parse(readFileSync(path.join(APP, 'profiles', profile.profileDir, 'manifest.json')));
+  const profileConfig = manifest.config?.jspeakProfile;
   const page = readZip(rpk, 'pages/index/index.js').toString('utf8');
   const names = new Set(zipNames(rpk));
-  if (manifest.config?.jspeakProfile?.runtime !== 'full-js-synthesis') throw new Error(`Profile mismatch in ${rpk}`);
-  if (!page.includes(`READY ${versionName} A`) || !page.includes(stamp)) {
+  if (profileConfig?.runtime !== 'full-js-synthesis') throw new Error(`Profile mismatch in ${rpk}`);
+  if (profileConfig?.variant !== 'A' || profileConfig?.language !== profile.language) {
+    throw new Error(`Language/variant mismatch in ${rpk}`);
+  }
+  if (manifest.versionName !== expectedManifest.versionName || manifest.versionCode !== expectedManifest.versionCode) {
+    throw new Error(`Version mismatch in ${rpk}`);
+  }
+  if (profileConfig?.actionReadBytes !== pack.totalDataBytes) throw new Error(`Read-byte mismatch in ${rpk}`);
+  if (!page.includes('READY ') || !page.includes(manifest.versionName) || !page.includes(stamp)) {
     throw new Error(`Version or build stamp missing in ${rpk}`);
   }
-  for (const name of RUNTIME_DATA) if (!names.has(`common/espeak/${name}`)) throw new Error(`Missing ${name} in ${rpk}`);
+  const expectedDataNames = new Set(pack.files.map(entry => entry.packagePath));
+  for (const entry of pack.files) {
+    const name = `common/espeak/${entry.packagePath}`;
+    if (!names.has(name)) throw new Error(`Missing ${entry.packagePath} in ${rpk}`);
+    if (sha256(readZip(rpk, name)) !== entry.sha256) throw new Error(`Data hash mismatch for ${entry.packagePath} in ${rpk}`);
+  }
+  for (const name of names) {
+    if (!name.endsWith('/') && name.startsWith('common/espeak/') &&
+        !expectedDataNames.has(name.slice('common/espeak/'.length))) {
+      throw new Error(`Unexpected data file ${name} in ${rpk}`);
+    }
+  }
   for (const name of ['provenance.json', 'candidate-comparison.json', 'oracle.wav', 'oracle-wave.txt']) {
     if (names.has(`common/espeak/${name}`)) throw new Error(`Build-time asset ${name} must not ship in full synthesis profile`);
   }
   if ([...names].some(name => name.startsWith('common/jspeak/'))) throw new Error(`Retired precomputed audio found in ${rpk}`);
-  if (!page.includes('english-synthesis')) throw new Error('Full synthesis profile lost the synthesis runtime');
+  if (!page.includes('english-synthesis') || !page.includes('cmn-synthesis')) {
+    throw new Error('Full synthesis profile lost a language synthesis runtime');
+  }
+}
+
+function rpkMatches(rpk, stamp, profile) {
+  if (!existsSync(rpk)) return false;
+  try {
+    const manifest = JSON.parse(readZip(rpk, 'manifest.json'));
+    if (manifest.versionName === undefined || manifest.config?.jspeakProfile?.language !== profile.language) return false;
+    const page = readZip(rpk, 'pages/index/index.js').toString('utf8');
+    return page.includes(stamp) && page.includes(manifest.versionName);
+  } catch (error) {
+    return false;
+  }
 }
 
 function zipEntryCount(rpk) {
   return zipNames(rpk).length;
 }
 
-async function buildProfiles() {
-  execFileSync(process.execPath, [path.join(APP, 'tools/generate-assets.mjs')], { stdio: 'inherit' });
+async function buildProfiles({ only = null, reuseStamp = false, reuseRpk = false } = {}) {
+  const started = Date.now();
+  const trace = message => console.error(`[tts:build +${((Date.now() - started) / 1000).toFixed(1)}s] ${message}`);
+  if (!existsSync(path.join(EN_SOURCE_DATA, 'manifest.json'))) {
+    trace('generate en data pack');
+    execFileSync(process.execPath, [path.join(ROOT, 'tools/build-data/build.mjs')], { stdio: 'inherit' });
+  }
+  if (!existsSync(path.join(CMN_SOURCE_DATA, 'manifest.json'))) {
+    trace('generate cmn data pack');
+    execFileSync(process.execPath, [path.join(ROOT, 'tools/build-language/build.mjs')], { stdio: 'inherit' });
+  }
+  if (!reuseStamp) execFileSync(process.execPath, [path.join(APP, 'tools/generate-assets.mjs')], { stdio: 'inherit' });
   const stampMatch = readFileSync(path.join(APP, 'src/build-stamp.js'), 'utf8').match(/B\d{6}T\d{6}/);
   if (!stampMatch) throw new Error('Build stamp generation failed');
   const stamp = stampMatch[0];
-  const reference = await generateReferenceAudio();
+  const enManifest = readFileSync(EN_MANIFEST_SOURCE);
 
   const artifactDirectory = path.join(ROOT, 'artifacts', `vela-tts-${stamp}`);
   mkdirSync(artifactDirectory, { recursive: true });
-  writeFileSync(path.join(artifactDirectory, 'reference.wav'), reference.bytes);
-  rmSync(DIST, { recursive: true, force: true });
   mkdirSync(DIST, { recursive: true });
-
   const profiles = [];
-  stageProfile();
-  const rpk = buildRpk();
-  const manifest = JSON.parse(readFileSync(path.join(APP, 'src/manifest.json')));
-  validateRpk(rpk, stamp, manifest.versionName);
-  copyFileSync(rpk, path.join(artifactDirectory, 'tts.rpk'));
-  const startup = benchmarkVelaStartup(rpk);
-  const buildManifest = JSON.parse(readFileSync(path.join(APP, 'build/manifest.json')));
-  profiles.push({
-    variant: 'A',
-    rpk,
-    rpkBytes: startup.rpk.bytes,
-    rpkSha256: startup.rpk.sha256,
-    unpackedBytes: startup.rpk.uncompressedBytes,
-    buildStamp: stamp,
-    buildTimestamp: buildManifest.packageInfo.timeStamp,
-    versionName: manifest.versionName,
-    versionCode: manifest.versionCode,
-    runtime: manifest.config.jspeakProfile.runtime,
-    sampleRate: manifest.config.jspeakProfile.sampleRate,
-    bitsPerSample: manifest.config.jspeakProfile.bitsPerSample,
-    actionReadBytes: manifest.config.jspeakProfile.actionReadBytes,
-    outputAudioBytes: reference.bytes.length,
-    packagedAudioBytes: 0,
-    packageFileCount: zipEntryCount(rpk),
-    audioSha256: sha256(reference.bytes),
-    startup
-  });
+  const references = [];
+  try {
+    const selected = only ? PROFILES.filter(profile => profile.id === only) : PROFILES;
+    if (!selected.length) throw new Error('Unknown profile: ' + only);
+    for (const profile of selected) {
+      const pack = readPack(profile);
+      trace(`reference ${profile.id}`);
+      const reference = await generateReferenceAudio(profile, pack);
+      writeFileSync(path.join(artifactDirectory, `reference-${profile.id}.wav`), reference.bytes);
+      references.push({
+        profile: profile.id,
+        voice: pack.profile?.voice,
+        text: profile.testText,
+        sampleCount: reference.sampleCount,
+        commandCount: reference.commandCount,
+        wavBytes: reference.bytes.length,
+        sha256: reference.sha256
+      });
+
+      const profileManifest = JSON.parse(readFileSync(path.join(APP, 'profiles', profile.profileDir, 'manifest.json')));
+      const candidate = path.join(DIST, expectedRpkName(profileManifest));
+      let rpk;
+      if (reuseRpk && rpkMatches(candidate, stamp, profile)) {
+        trace(`reuse ${profile.id}`);
+        rpk = candidate;
+      } else {
+        stageProfile(profile, pack, stamp);
+        trace(`build ${profile.id}`);
+        rpk = buildRpk();
+      }
+      trace(`validate ${profile.id}`);
+      validateRpk(rpk, stamp, profile, pack);
+      copyFileSync(rpk, path.join(artifactDirectory, `${profile.id}.rpk`));
+      const startup = benchmarkVelaStartup(rpk);
+      const manifest = JSON.parse(readZip(rpk, 'manifest.json'));
+      profiles.push({
+        id: profile.id,
+        variant: 'A',
+        language: profile.language,
+        voice: pack.profile?.voice,
+        rpk,
+        rpkBytes: startup.rpk.bytes,
+        rpkSha256: startup.rpk.sha256,
+        unpackedBytes: startup.rpk.uncompressedBytes,
+        buildStamp: stamp,
+        buildTimestamp: manifest.packageInfo?.timeStamp || null,
+        versionName: manifest.versionName,
+        versionCode: manifest.versionCode,
+        runtime: manifest.config.jspeakProfile.runtime,
+        sampleRate: manifest.config.jspeakProfile.sampleRate,
+        bitsPerSample: manifest.config.jspeakProfile.bitsPerSample,
+        actionReadBytes: manifest.config.jspeakProfile.actionReadBytes,
+        dataFingerprint: pack.dataFingerprint,
+        dataFileCount: pack.files.length,
+        dataBytes: pack.totalDataBytes,
+        outputAudioBytes: reference.bytes.length,
+        packagedAudioBytes: 0,
+        packageFileCount: zipEntryCount(rpk),
+        audioSha256: reference.sha256,
+        startup
+      });
+    }
+  } finally {
+    writeFileSync(SRC_MANIFEST, enManifest);
+  }
+
+  for (const profile of profiles) {
+    copyFileSync(path.join(artifactDirectory, `${profile.id}.rpk`), path.join(DIST, path.basename(profile.rpk)));
+  }
+
   const commit = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const branch = execFileSync('git', ['-C', ROOT, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim();
-  const profileA = profiles[0];
   const identity = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     branch,
     commit,
     buildStamp: stamp,
-    reference: {
-      text: 'Hello world.',
-      sampleCount: reference.sampleCount,
-      commandCount: reference.commandCount,
-      wavBytes: reference.bytes.length,
-      sha256: sha256(reference.bytes)
-    },
+    references,
     runtimeProfiles: ['A'],
     retiredRuntimeProfiles: ['B', 'C'],
     profiles
@@ -205,17 +350,27 @@ async function buildProfiles() {
 }
 
 if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).href) {
-  if (process.argv.length > 2) throw new Error('Usage: node tools/build-vela-tts-profiles/build.mjs');
-  buildProfiles().then(report => {
+  const args = process.argv.slice(2);
+  let only = null, reuseStamp = false, reuseRpk = false;
+  for (const arg of args) {
+    if (arg === '--reuse-stamp') reuseStamp = true;
+    else if (arg === '--reuse-existing-rpk') reuseRpk = true;
+    else if (arg.startsWith('--profile=')) only = arg.slice('--profile='.length);
+    else throw new Error('Usage: node tools/build-vela-tts-profiles/build.mjs [--profile=en|cmn] [--reuse-stamp] [--reuse-existing-rpk]');
+  }
+  buildProfiles({ only, reuseStamp, reuseRpk }).then(report => {
     console.log(JSON.stringify({
       branch: report.branch,
       commit: report.commit,
       buildStamp: report.buildStamp,
       profiles: report.profiles.map(profile => ({
+        language: profile.language,
         versionName: profile.versionName,
         rpk: profile.rpk,
         bytes: profile.rpkBytes,
         sha256: profile.rpkSha256,
+        unpackedBytes: profile.unpackedBytes,
+        dataBytes: profile.dataBytes,
         parseSourceBytes: profile.startup.rpk.parseSourceBytes,
         actionReadBytes: profile.actionReadBytes
       }))

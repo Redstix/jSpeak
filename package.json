@@ -44,6 +44,8 @@
     "benchmark:synthesis-runtime": "node tools/compare/synthesis-runtime-benchmark.mjs",
     "benchmark:vela-startup": "node --expose-gc tools/perf/vela-startup-benchmark.mjs",
     "benchmark:vela-synthesis": "node tools/perf/vela-synthesis-benchmark.mjs",
+    "benchmark:node-synthesis": "node --expose-gc tools/perf/node-synthesis-benchmark.mjs",
+    "stress:node-synthesis": "node --expose-gc tools/perf/node-synthesis-stress.mjs",
     "oracle:wave-sample:build": "node tools/oracle/wave-sample-build.mjs",
     "text:build": "node tools/build-text/build.mjs",
     "test:text": "node tools/build-text/verify.mjs",

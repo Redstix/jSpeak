@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-17T13:18:19.441Z",
+  "node": {
+    "version": "v24.21.0",
+    "arch": "x64",
+    "platform": "linux"
+  },
+  "method": {
+    "rounds": 5,
+    "iterationsPerRound": 25,
+    "pairedRunsPerLanguage": 125,
+    "initialization": "create a new synthesizer per paired iteration; excludes data file I/O",
+    "synthesis": "fixed text to complete PCM16 WAV with an immediate scheduler; excludes package I/O, file write and playback",
+    "rtf": "elapsed seconds / audio seconds; Node/V8 only"
+  },
+  "profiles": [
+    {
+      "language": "en",
+      "voice": "en-us",
+      "text": "Hello world.",
+      "output": {
+        "samples": 23190,
+        "wavBytes": 46424,
+        "sha256": "db5fdc363149cb702a3f892608648b196c35a420d46851f906c5a2c49e24fdb1",
+        "commandCount": 43,
+        "clauseCount": 1
+      },
+      "audioSeconds": 1.051700680272109,
+      "initializationMs": {
+        "min": 1.679,
+        "median": 2.142,
+        "max": 40.153
+      },
+      "synthesisMs": {
+        "min": 16.888,
+        "median": 23.435,
+        "max": 282.633
+      },
+      "rtf": {
+        "min": 0.016058,
+        "median": 0.022283,
+        "max": 0.268739
+      }
+    },
+    {
+      "language": "cmn",
+      "voice": "cmn",
+      "text": "你好，世界。",
+      "output": {
+        "samples": 32822,
+        "wavBytes": 65688,
+        "sha256": "47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1",
+        "commandCount": 47,
+        "clauseCount": 2
+      },
+      "audioSeconds": 1.4885260770975057,
+      "initializationMs": {
+        "min": 9.008,
+        "median": 11.002,
+        "max": 57.792
+      },
+      "synthesisMs": {
+        "min": 19.517,
+        "median": 29.315,
+        "max": 77.244
+      },
+      "rtf": {
+        "min": 0.013112,
+        "median": 0.019694,
+        "max": 0.051893
+      }
+    }
+  ],
+  "limitations": [
+    "Node/V8 measurements do not represent device QuickJS, device heap or device latency.",
+    "No package file I/O, internal file write/readback or playback is included."
+  ]
+}

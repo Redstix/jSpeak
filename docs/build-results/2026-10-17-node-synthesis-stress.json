@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-17T13:18:43.290Z",
+  "node": {
+    "version": "v24.21.0",
+    "arch": "x64",
+    "platform": "linux"
+  },
+  "sessionStress": {
+    "sessions": 100,
+    "elapsedMs": 5722.128,
+    "baseline": {
+      "en": {
+        "sha256": "2381004557eedf9242f8a882f16f95a2a3723c0af0e2df8ce812946ada319222",
+        "samples": 23190,
+        "commandCount": 43
+      },
+      "cmn": {
+        "sha256": "e706051964c7ef982bd2777082749e0893b964a08b0f285b0514961840db7195",
+        "samples": 32822,
+        "commandCount": 47
+      }
+    },
+    "allOutputsExact": true,
+    "allBuffersReleased": true,
+    "maxima": {
+      "en": {
+        "inFlight": 1,
+        "queue": 43,
+        "backpressure": 0
+      },
+      "cmn": {
+        "inFlight": 1,
+        "queue": 47,
+        "backpressure": 0
+      }
+    },
+    "heapBefore": {
+      "heapUsed": 7962936,
+      "heapTotal": 14458880,
+      "rss": 83185664,
+      "arrayBuffers": 3660042
+    },
+    "heapSamples": [
+      {
+        "session": 10,
+        "heapUsed": 8436928,
+        "heapTotal": 18653184,
+        "rss": 91049984,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 20,
+        "heapUsed": 8534088,
+        "heapTotal": 18653184,
+        "rss": 91967488,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 30,
+        "heapUsed": 8621240,
+        "heapTotal": 18653184,
+        "rss": 92098560,
+        "arrayBuffers": 4255701
+      },
+      {
+        "session": 40,
+        "heapUsed": 8775168,
+        "heapTotal": 18915328,
+        "rss": 93147136,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 50,
+        "heapUsed": 8846816,
+        "heapTotal": 19177472,
+        "rss": 93409280,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 60,
+        "heapUsed": 8877984,
+        "heapTotal": 19701760,
+        "rss": 93540352,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 70,
+        "heapUsed": 8908680,
+        "heapTotal": 19701760,
+        "rss": 93540352,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 80,
+        "heapUsed": 8939328,
+        "heapTotal": 19701760,
+        "rss": 93802496,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 90,
+        "heapUsed": 8960768,
+        "heapTotal": 19701760,
+        "rss": 93802496,
+        "arrayBuffers": 3762474
+      },
+      {
+        "session": 100,
+        "heapUsed": 8958344,
+        "heapTotal": 19701760,
+        "rss": 94588928,
+        "arrayBuffers": 3762474
+      }
+    ],
+    "heapUsedDelta": 995408
+  },
+  "longInput": {
+    "inputLimitBytes": 65536,
+    "clauseLimit": 256,
+    "boundaryPlanning": {
+      "textBytes": 65536,
+      "clauses": 256,
+      "elapsedMs": 7349.398,
+      "result": {
+        "inputBytes": 65536,
+        "clauses": 256,
+        "commands": 184064
+      },
+      "error": null
+    },
+    "fullRender": {
+      "textBytes": 1536,
+      "clauses": 256,
+      "samples": 3571243,
+      "audioMs": 161961.134,
+      "elapsedMs": 2686.06,
+      "rtf": 0.016585,
+      "outputSha256": "cc693c80fb56c19e03091974d56ea65bffd75dafb4bdd04dafd29c6747d03163",
+      "currentInFlightChunks": 0,
+      "queueCommands": 0,
+      "maxInFlightChunks": 1,
+      "maxQueueCommands": 170
+    }
+  },
+  "backpressure": {
+    "firstState": "backpressure",
+    "firstInFlightChunks": 2,
+    "maxInFlightChunks": 2,
+    "maxQueueCommands": 47,
+    "backpressureCount": 31,
+    "emittedChunks": 33,
+    "emittedSamples": 32822,
+    "releasedChunks": 33,
+    "ended": true,
+    "error": null,
+    "finalCurrentInFlightChunks": 0,
+    "finalQueueCommands": 0
+  },
+  "cancelRestart": {
+    "canceled": true,
+    "cancelLatencyMs": 0.181421,
+    "beforeCancel": {
+      "state": "running",
+      "inFlight": 3,
+      "queue": 166
+    },
+    "afterCancel": {
+      "state": "canceled",
+      "inFlight": 0,
+      "queue": 0
+    },
+    "restartElapsedMs": 48.459,
+    "restartOutputStable": true,
+    "restartOutputSha256": "e706051964c7ef982bd2777082749e0893b964a08b0f285b0514961840db7195"
+  },
+  "totalElapsedMs": 16384.978,
+  "limitations": [
+    "Node/V8 only; device heap, CPU and cancellation behavior remain unmeasured.",
+    "The 64KiB/256-clause boundary is planning-only; the full render case is 256 clauses and 1536 bytes.",
+    "Heap samples are GC-influenced point measurements, not peak device heap."
+  ]
+}

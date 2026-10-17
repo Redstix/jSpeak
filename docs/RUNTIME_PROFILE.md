@@ -13,6 +13,7 @@
 - M11 Node 有界命令→PCM运行时已验收：170命令、4096样本/块、最多4块在途（32768B）、100次会话无状态串扰。完整文本→PCM与Vela文件播放仍未集成。
 - 2026-10-17 起产品构建只保留 A 档完整 JS 合成；B/C 预生成 WAV/降采样播放档由用户取消并退役。0.5.x 的 B/C 数字只保留为历史证据，不代表当前构建入口或产品取舍。
 - 当前候选装载已证；完整reader初始化、最终驻留预算、合成 RTF、峰值 heap、文件间隙及稳定性尚未证实。assemble共19764ms，maxHashCopy685ms待调查；应用可见backing峰值930777B不是heap。双音 534ms/2s 不是 eSpeak DSP 基准；maxSlice 77ms 未定位。
+- 2026-10-17：en-us 与 cmn 的固定语料 Node 文本→PCM 均已与 C Oracle 逐点 exact（en 67/67 full wavegen；cmn 29/1），并产出 `0.6.0-en`/`0.6.0-cmn` 两个 A 档 RPK。设备启动、出声、RTF/heap 仍待用户验收。
 
 ## 隔离与可用语言子集
 
@@ -20,7 +21,7 @@
 
 使用 ArrayBuffer、Uint8Array、Int16Array、Uint32Array、DataView、Math.imul、字节序和有符号运算时须验证具体行为。BigInt、Promise、TextEncoder/TextDecoder 不默认成为核心依赖；新引入的内建操作先核验目标能力。随机状态遵从 C Oracle，不以 Math.random 代替。
 
-语言数据profile必须显式选择：`en-us`仍是partial-M12 JS路径；`cmn`完成C数据/差分候选和`CalcPitches_Tone`函数级切片，`jsRuntimeStatus=unsupported`。不得把cmn数据包中的Oracle WAV可播放或tone函数切片解释为QuickJS中文合成可用。
+语言数据profile必须显式选择：`en-us`与`cmn`均已有固定语料 Node 文本→PCM exact 路径，分别由 `createEnglishSynthesizer`、`createCmnSynthesizer` 选择；两者共享有界运行时。Node exact 不等于 QuickJS/Vela 设备可用；`0.6.0-cmn` 的真机中文出声必须由用户确认。
 
 ## 数据装载契约
 
@@ -124,7 +125,25 @@ PCM 有界不代表总内存有界。输入文本、code points、clause、音�
 | 输出 | 22809样本 / 45662B / SHA256 `fc94cec1…ea6d1` | Node 合成输出；M12 C/JS exact 未闭合 |
 | 设备 CPU / heap / RTF | 不可测/未知 | 无设备测量 API 或用户回报 |
 
-0.5.3-A 的设备结论仅限用户确认的启动、固定英文合成/播放与清晰听感；不能推广到 0.6.0-en，也不能代表中文。0.6.0-en 待用户真机验收。
+M1 表中的 22,809 样本是 PCM 修复前的历史身份；2026-10-17 收口后 en `Hello world.` 为 23,190 样本并逐点 exact，见下节。0.5.3-A 的设备结论仅限用户确认的启动、固定英文合成/播放与清晰听感；不能推广到 0.6.0-en，也不能代表中文。
+
+## M15 0.6.0 en+cmn 构建边界
+
+2026-10-17 的收口构建在同一套 A 档源码上生成两个语言包，均不打包预生成音频。构建身份、数据指纹和逐例 PCM 校验见 [0.6.0 en+cmn 构建记录](build-results/2026-10-17-tts-0.6.0-cmn.md)。
+
+| 字段 | 0.6.0-en A | 0.6.0-cmn A | 测量边界 |
+|---|---:|---:|---|
+| RPK / 解包 | 635685B / 1338207B | 1066129B / 2736927B | ZIP 静态字节；不代表设备装载内存 |
+| 启动解析 JS | 383121B | 384675B | Node/V8 `vm.Script` 输入代理，非 QuickJS/Vela 实测 |
+| 启动文件读 / 首次点击读 | 0B / 898009B | 0B / 2295161B | 源码审计；首次点击整读 |
+| 数据文件 / 数据字节 | 6 / 898009B | 6 / 2295161B | 包内 `.txt` 包装原始上游字节 |
+| 输出参考 | 23190 样本 / 46424B | 32822 样本 / 65688B | 分别与 C Oracle 逐字节一致 |
+| Node 初始化 median | 2.142ms | 11.002ms | 5×25 成对，Node/V8 |
+| Node 合成 median / RTF median | 23.435ms / 0.022283 | 29.315ms / 0.019694 | 固定短句；设备 RTF 不可测/未知 |
+| 100 会话/压力 | exact，缓冲归还 | exact，缓冲归还 | 见 Node 压力 JSON；非设备 |
+| 设备 CPU / heap / RTF | 不可测/未知 | 不可测/未知 | 无设备测量 API 或用户回报 |
+
+cmn 唯一设计性 unsupported 是 `[[en-us]]` 动态英文词典切换；独立 cmn 包不携带 `en_dict`。100 次会话交替 en/cmn 无输出串扰；256 clause/1,536B 完整渲染 RTF 0.017430；64KiB/256 clause 规划通过（184,064 命令），未做同等规模的完整 PCM 渲染。慢消费者最终 33/33 块释放，取消时延 0.398196ms（Node 单次）。
 
 ## 设备验证纪律
 

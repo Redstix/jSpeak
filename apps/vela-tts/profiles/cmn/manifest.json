@@ -1,0 +1,24 @@
+{
+  "package": "org.jspeak.tts",
+  "name": "jSpeak TTS普通话测试",
+  "versionName": "0.6.0-cmn",
+  "versionCode": 18,
+  "minPlatformVersion": 1200,
+  "icon": "/common/logo.png",
+  "deviceTypeList": ["watch"],
+  "features": [{"name":"system.audio"},{"name":"system.file"}],
+  "config": {
+    "logLevel":"log",
+    "designWidth":432,
+    "jspeakProfile": {
+      "variant":"A",
+      "language":"cmn",
+      "quality":"full",
+      "runtime":"full-js-synthesis",
+      "sampleRate":22050,
+      "bitsPerSample":16,
+      "actionReadBytes":2295161
+    }
+  },
+  "router": {"entry":"pages/index","pages":{"pages/index":{"component":"index"}}}
+}

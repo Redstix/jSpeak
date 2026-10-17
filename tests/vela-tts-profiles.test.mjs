@@ -6,17 +6,26 @@ import {
   parsePcmWav
 } from '../tools/build-vela-tts-profiles/build.mjs';
 
-test('Vela TTS ships only the full JS synthesis profile', () => {
-  const manifest = JSON.parse(readFileSync(new URL('../apps/vela-tts/profiles/a/manifest.json', import.meta.url)));
-  assert.equal(manifest.package, 'org.jspeak.tts');
-  assert.equal(manifest.versionName, '0.6.0-en');
-  assert.equal(manifest.versionCode, 17);
-  assert.equal(manifest.config.jspeakProfile.variant, 'A');
-  assert.equal(manifest.config.jspeakProfile.language, 'en-us');
-  assert.equal(manifest.config.jspeakProfile.runtime, 'full-js-synthesis');
-  assert.equal(manifest.config.jspeakProfile.sampleRate, 22050);
+test('Vela TTS ships only full JS synthesis en and cmn profiles', () => {
+  const en = JSON.parse(readFileSync(new URL('../apps/vela-tts/profiles/a/manifest.json', import.meta.url)));
+  const cmn = JSON.parse(readFileSync(new URL('../apps/vela-tts/profiles/cmn/manifest.json', import.meta.url)));
+  assert.equal(en.package, 'org.jspeak.tts');
+  assert.equal(en.versionName, '0.6.0-en');
+  assert.equal(en.versionCode, 17);
+  assert.equal(en.config.jspeakProfile.variant, 'A');
+  assert.equal(en.config.jspeakProfile.language, 'en-us');
+  assert.equal(en.config.jspeakProfile.runtime, 'full-js-synthesis');
+  assert.equal(en.config.jspeakProfile.sampleRate, 22050);
+  assert.equal(cmn.package, 'org.jspeak.tts');
+  assert.equal(cmn.versionName, '0.6.0-cmn');
+  assert.equal(cmn.versionCode, 18);
+  assert.equal(cmn.config.jspeakProfile.variant, 'A');
+  assert.equal(cmn.config.jspeakProfile.language, 'cmn');
+  assert.equal(cmn.config.jspeakProfile.runtime, 'full-js-synthesis');
+  assert.equal(cmn.config.jspeakProfile.sampleRate, 22050);
+  assert.equal(cmn.config.jspeakProfile.actionReadBytes, 2295161);
   const page = readFileSync(new URL('../apps/vela-tts/profiles/a/page.ux', import.meta.url), 'utf8');
-  assert.equal(page.includes('0.6.0-en'), true);
+  assert.equal(page.includes('DATA_ASSETS.versionName'), true);
   assert.equal(page.includes('common/jspeak'), false);
   assert.equal(page.includes('11025'), false);
   assert.equal(page.includes('5512'), false);

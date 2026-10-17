@@ -1,12 +1,25 @@
 # Implementation status — 2026-10-15
 
-执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile与CalcPitches_Tone切片已落地：数据差分29 exact/1 unsupported，tone差分13/13 exact；cmn完整JS前端和真机中文出声未完成。
+## 2026-10-17 0.6.0 en+cmn 收口（本轮实测）
+
+- **PCM 已锁住**：修正 Wavegen `AdvanceParameters` 的 `ampIx += ampInc`、double 参数增量、AGC 负峰整数路径、force CopyFrame/last_frame 规则、cmn neighbor 索引与 planner 队列边界后，JS en-us 固定句与 C 逐点一致；cmn 固定 30 例达到 **C phoneme 29 exact + 1 unsupported、JS phoneme 29/1、JS PCM 29/1**。
+- 必验两句：`你好，世界。` 32,822 样本 / SHA256 `47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1`；`我会说普通话。` 44,089 样本 / SHA256 `5cd5a35a4e1d10a675151506dfd63e24eb75559b3a24992f245eac1e5e32d0d0`，均与 C Oracle 逐字节一致。300 次重复长输入也 exact。
+- 唯一 unsupported：`904-voice-switch-en-us`（`[[en-us]] hello`）。独立 cmn 包不携带 `en_dict`，动态英文切换明确失败，不静默回退。
+- **0.6.0-en**：RPK 635,685B、解包 1,338,207B、SHA256 `635a6c1465d7746b07cedf6a49473e17d50fabe76ac33056154238e6ec3ae8d2`，构建戳 `B261017T125827`，versionName/Code `0.6.0-en`/17，数据 898,009B；输出 23,190 样本、SHA256 `db5fdc363149cb702a3f892608648b196c35a420d46851f906c5a2c49e24fdb1`。
+- **0.6.0-cmn**：RPK 1,066,129B、解包 2,736,927B、SHA256 `918fe6ac0b3b9a3c02eebf0ed5321b491c64be3122164964497113e31f5f4822`，构建戳 `B261017T125827`，versionName/Code `0.6.0-cmn`/18，数据 2,295,161B（6 文件，fingerprint `d7d03441197fbbfc69170461f8bed2c1e1a2558d0e0a2ee8b0051b54bc3d4f48`）；输出 32,822 样本。两个包均不打包预生成音频。
+- 构建器新增 cmn profile、按语言生成 `DATA_ASSETS`/合成器选择、双 RPK 静态校验、cmn 参考 PCM 哈希校验与 en/cmn 数据量分开记录。`npm run tts:build` 一次构建 en+cmn；`--reuse-stamp --reuse-existing-rpk` 可只补缺失包。
+- 设备页 A 档新增测试区：固定短语、连续 10/20 次、约 2K 字符长文本、停止/重启；显示 elapsed、样本数、音频时长、RTF 与成功/失败。设备 heap/CPU 仍不可测。
+- 回归：`node --test tests/*.test.mjs` **279/279**；`npm run test:wave-generator:full` **67/67 exact、6,344,247 样本**；`npm run language:cmn:build/verify` 通过。
+- Node 5×25 成对（en/cmn）：初始化 median 2.142/11.002ms；合成 median 23.435/29.315ms；RTF median 0.022283/0.019694；min/max 见 [基准 JSON](build-results/2026-10-17-node-synthesis-benchmark.json)。压力：100 次 en/cmn 交替会话全部输出 exact、缓冲归还；256 clause/1,536B 完整渲染 RTF 0.017430；64KiB/256 clause 仅规划通过（184,064 命令）；慢消费 backpressure 33 块全部释放；取消时延 0.398196ms。见 [压力 JSON](build-results/2026-10-17-node-synthesis-stress.json)。
+- 证据边界：以上均为 Node/V8 数据。`0.6.0-en`、`0.6.0-cmn` 的真机启动、出声、听感、设备 RTF/heap **待用户真机验收**；不得用 0.5.3-A 的英文听感推广。
+
+执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。0.6.0 已把 en-us 与 cmn 的固定语料完整文本→PCM 接到 C Oracle exact，并产出两个 A 档 RPK；真机启动/听感仍待用户验收。
 
 ## 2026-10-17 真机结果与下一版决定
 
 - **0.5.3-A 真机通过**：用户确认「a档rpk真机测试通过，有清晰hello，world声音」。这只证明 A 档固定英文的启动/合成/播放/听感可用；未提供页头逐行数据，设备 CPU/heap/RTF 仍不可测/未知，M12 的 C/JS PCM exact 仍未闭合。
 - **B/C 档取消**：用户决定下一版不再提供预合成播放档，只保留 A 档完整 JS 合成。B/C 未做真机验收，0.5.3 B/C 构建仅作历史记录。
-- 2026-10-17 M1 已完成 A-only 构建：B/C profile、降采样/预生成音频分支与测试断言已删除；`npm run tts:profiles` 改为 `npm run tts:build`，只产 A 档完整 JS 合成。`0.6.0-en` RPK 630034B / 解包 1315832B / SHA256 `dbdb820b137ef4329970411ac83f76cb7a3fdd264639de44d1e54dfb3ba9f2f7`，构建戳 `B261017T055725`，versionName/Code `0.6.0-en`/17；启动解析代理 360750B，首次点击整读 898009B。`npm test` 277/277、0 fail、0 skip；待用户真机验收。
+- 2026-10-17 M1 已完成 A-only 构建：B/C profile、降采样/预生成音频分支与测试断言已删除；`npm run tts:profiles` 改为 `npm run tts:build`，只产 A 档完整 JS 合成。M1 历史身份 `0.6.0-en` RPK 630034B / 解包 1315832B / SHA256 `dbdb820b137ef4329970411ac83f76cb7a3fdd264639de44d1e54dfb3ba9f2f7`，构建戳 `B261017T055725`；当前身份见本页顶部。M1 时 `npm test` 277/277、0 fail、0 skip。
 - 下一版范围：普通话（cmn）合成、合成速度/性能/压力测试；由 Codex 执行，完成即 commit + push。
 
 ## 2026-10-15 本轮核查（实测，非文档推断）
@@ -60,7 +73,7 @@
 - M09 Generate高层事件已完成固定en-us逻辑切片：99个真实CLI子句、19994个高层合成事件全exact。观察器为暴露完整逻辑计划将`N_WCMDQ`放大为4096；原170项有界队列的满队resume和消费调度尚未验收。见[GENERATE_EVENTS](GENERATE_EVENTS.md)与[M09记录](build-results/2026-10-06-m09-generate-events.md)。
 - M10固定en-us波形后端已完成：67个非空输入、99 clause、15449条Generate命令、6344247个样本与C Oracle默认PCM逐点exact；1/7/64/1323/4096样本分块拼接一致，PCM工作缓冲不随输出时长增长。SPECT/SPECT2/WAVE/WAVE2/PAUSE/AMPLITUDE/PITCH/EMBEDDED/MARKER均已覆盖，profile外后端显式unsupported。见[WAVE_GENERATOR](WAVE_GENERATOR.md)与[M10完整验收](build-results/2026-10-10-m10-wave-full.md)。
 - M11有界命令→PCM运行时已完成：170命令窗口、4096样本chunk、最多4块在途PCM（32768B）、输入65536B/code point 16384/clause 256/中间命令100000显式上限；慢消费backpressure、1秒/30秒、5001命令长流、取消重启、资源回收和100次会话无串扰通过。接入运行时后M10全量仍67/67 exact。见[M11验收](build-results/2026-10-10-m11-bounded-runtime.md)。
-- M12 Vela适配已产出可安装测试RPK：固定`Hello world.`连接候选数据、JS文本→命令→有界PCM→完整WAV、internal写读和`@system.audio`播放，页面生命周期有取消入口。RPK静态/解包校验通过，见[0.5.0构建记录](build-results/2026-10-11-tts-0.5.0.md)。但集成文本→命令路径未达到C/JS PCM exact（JS 22809样本，C 23190样本，首个差异1384），真机播放、听感、前后台与清理待用户验收；M12不可标记完成。
+- M12 Vela适配最初产出0.5.0测试RPK时，JS 22809样本与C 23190不一致（首个差异1384）；2026-10-17 收口后该差异已消除，`Hello world.` 为 23190 样本且逐点 exact。0.6.0-en/cmn 的 internal 写读、播放和清理路径仍只待真机验收。
 - M14启动资源优化已在`perf/quickjs-vela-optimization`产出0.5.1 A/B/C三档：A保留完整JS合成并把启动解析从0.5.0的1731654B降至361297B；B/C为11025Hz/5512Hz预计算播放档，启动解析约4.7KB且无JS文件I/O。`npm test` 278/278、数据校验与三档静态校验通过，见[0.5.1 profiles构建](build-results/2026-10-11-tts-0.5.1-profiles.md)。源码审计证实0.5.0启动不读数据，898009B只在点击后读取；启动闪退根因仍待真机A/B判定，M14/S1完整验收未完成。
 - M14续作已产出0.5.2 A/B/C：在A档22050Hz/PCM16输出SHA256不变的前提下，启动解析361297B→360630B、RPK 630242B→629948B、phontab初始化记录对象3686→190；首次点击整读898009B未变。`npm test` 279/279、数据校验与受影响差分（CalcPitches/MakePhonemeList/Prosody/GenerateEvents/cmn tone/Wavegen full逐点exact）通过，见[0.5.2 QuickJS优化构建](build-results/2026-10-15-tts-0.5.2-quickjs-optimization.md)。目标运行引擎按用户告知为QuickJS；固件/QuickJS版本与设备heap仍未知，0.5.2三档待真机验收。
 - M14合成CPU续作已产出0.5.3 A/B/C：A档Node成对代理合成median -27.73%、输出逐位不变；启动解析以+94B换取运行期调用/寻址减少。全部指定差分与 `npm test` 通过，见[0.5.3合成CPU构建](build-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)与[0.5.3设备待验收](device-results/2026-10-15-tts-0.5.3-synthesis-cpu.md)。
@@ -98,14 +111,14 @@
 - 本轮构建依赖审计20项（3 low、17 high），历史14项见THIRD_PARTY_NOTICES，未盲目升级。探针已含四份上游许可，配套源代码可用`npm run probe:source`生成。
 - 交接与运维纪律：无人值守链的脚本与 report 必须放持久目录（`~/.hermes/scripts/`）；放 `~/.hermes/cache/scratch/` 会被 24h prune 清掉——2026-10-11 之后整条链停摆三天无人发现，直接原因就是「看门狗 cron 已丢失 + report 落在 scratch」。
 - 交接只交仓库内产物：`dist/`、`build/`、`artifacts/`、`upstream/`、`node_modules/` 全部 gitignore；新机器 clone 后必须按 [HANDOVER](HANDOVER.md) §0 重建（C Oracle、apps 依赖、三档 RPK），重建会得到新的可见构建戳，身份以文档记录的 SHA256 为准。
-- M15剩余工作：cmn TranslateClause、ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen参数化、端到端C/JS exact、Vela集成和用户听感验收；`CalcPitches_Tone`仅为函数级切片。M13数据最小化未开始；M14已完成0.5.2启动解析/打包减法与0.5.3 Node代理合成CPU低损优化，但设备启动、heap、RTF、S1稳定性与最终预算仍未验收。
+- M15剩余工作：更广 cmn 语料、动态词典/混排边界、Vela/QuickJS 真机中文听感与设备资源；固定语料的 `TranslateClause`/tokenizer/MakePhonemeList/Generate/Wavegen 端到端 C/JS PCM 已闭合（29 exact + 1 设计性 unsupported）。M13数据最小化未开始；M14已完成0.5.2启动解析/打包减法与0.5.3 Node代理合成CPU低损优化，但设备启动、heap、RTF、S1稳定性与最终预算仍未验收。
 
 ## 下一步
 
-0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、A-only RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。0.6.0-en 的真机启动、播放与听感仍待用户验收。
-1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle（当前 JS 22809 样本 vs C 23190，首个差异样本 1384）；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
-2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
-3. M13数据最小化（未开始）、M14设备资源/RTF证据与S1稳定性、M16维护演练纳入首发。M15完整JS/真机验收继续单列跟踪。
+0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、en+cmn RPK），再复跑 `npm test`、`npm run language:cmn:verify` 与 `npm run test:wave-generator:full` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。
+1. **真机验收**：用户安装并确认 `0.6.0-en`、`0.6.0-cmn` 的启动、合成/播放、听感、停止/重启与设备页测试区数字。Agent 不得代宣。
+2. M12/M15 的 Node 固定语料已闭合；剩余是把更广语料、设备 QuickJS 行为、设备 heap/RTF/首音/文件间隙纳入证据。D1 的 685ms hash 峰值另轮调查。
+3. M13 数据最小化（未开始）、M14 设备资源/RTF证据与 S1 稳定性、M16 维护演练纳入首发。
 4. 基础设施：若继续无人值守，重建看门狗，并把阶段 report 从 scratch 迁到持久目录。
 
 不以文档存在代替功能完成，不以 harness 自检代替 C/JS 兼容通过，不把设备等待当作设备验收通过。

@@ -1,6 +1,16 @@
 # Mandarin (cmn) support status
 
-执行时间：2026-10-11。本页记录 M15 能在当前前置条件下完成的部分：独立 `cmn` 数据 profile、固定上游锁、C Oracle 语料差分、tone/PCM 证据和显式 unsupported 边界。**它不是完整中文 JS TTS 通过证明。**
+执行时间：2026-10-11，2026-10-17 收口更新。本页记录独立 `cmn` 数据 profile、固定上游锁、C Oracle 语料差分、tone/PCM 证据、完整 JS 文本→PCM 差分和显式 unsupported 边界。**Node 已闭合；真机中文听感仍只待用户确认。**
+
+## 2026-10-17 收口更新
+
+- `createCmnSynthesizer` 已接通完整 JS 路径：UTF-8 输入 → clause/tokenizer → cmn 词典与规则 → 音素列表 → `CalcPitches_Tone` → `CalcLengths` → Generate 事件 → Wavegen → PCM16。
+- 固定 30 例差分：C 候选 phoneme **29 exact + 1 explicit unsupported**；JS phoneme **29 exact + 1 explicit unsupported**；JS PCM **29 exact + 1 explicit unsupported**。
+- `你好，世界。`：JS 32,822 样本，WAV 65,688B，SHA256 `47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1`，与 C Oracle 逐字节一致。
+- `我会说普通话。`：44,089 样本，SHA256 `5cd5a35a4e1d10a675151506dfd63e24eb75559b3a24992f245eac1e5e32d0d0`，exact。
+- `904-voice-switch-en-us`（`[[en-us]] hello`）仍为设计性 unsupported：独立 cmn 包不携带 `en_dict`，动态英文切换明确失败。
+- 已构建 `org.jspeak.tts.debug.0.6.0-cmn.rpk`，RPK 1,066,129B、解包 2,736,927B、SHA256 `918fe6ac0b3b9a3c02eebf0ed5321b491c64be3122164964497113e31f5f4822`，数据 2,295,161B。**待用户真机验收。**
+- 构建与 Node 性能/压力记录见 [0.6.0-cmn 构建](build-results/2026-10-17-tts-0.6.0-cmn.md) 与 [设备模板](device-results/2026-10-17-tts-0.6.0-en-cmn.md)。
 
 ## 当前结论
 
@@ -8,7 +18,7 @@
 - 独立运行时候选保留 6 个原始上游文件：`cmn_dict`、`intonations`、`lang/sit/cmn`、`phondata`、`phonindex`、`phontab`，总计 2,295,161 字节。
 - `cmn_list`、`cmn_rules`、`cmn_emoji` 是源输入锁；对应已编译运行时依赖是未修改的 `cmn_dict`。源输入不打包为另一种运行时格式。
 - 设备资源格式仍遵循既有契约：所有包内二进制文件以 `.txt` 包装扩展名保存，内容保持上游原始字节，不压缩、不改写。
-- 固定语料 30 例：29 例 full C data 与 standalone cmn 候选 phoneme/WAV exact；1 例显式分类 unsupported。
+- 固定语料 30 例：29 例 full C data 与 standalone cmn 候选 phoneme/WAV exact；1 例显式分类 unsupported。2026-10-17 起 JS phoneme/PCM 也达到同样的 29/1 边界。
 - `CalcPitches_Tone` JS 切片已完成：13 例、76 个 MakePhonemeList 后音素、`stresslevel/tonePh/pitch1/pitch2` 全 exact。
 - 参考 WAV 为 `PCM16 / mono / 22050Hz`，文本 `你好，世界。`，65,688 字节、32,822 样本，SHA256 `47e0c36e04e401b72ac884c1183e7dc09d59fb39384df93d1a9a8a701ccec9b1`。
 
@@ -36,7 +46,7 @@ const cmn = selectLanguageDataProfile('cmn'); // cmn.jsRuntimeStatus === 'unsupp
 const enUs = selectLanguageDataProfile('en-us'); // jsRuntimeStatus === 'partial-m12'
 ```
 
-`cmn` profile 可以独立选择并生成/校验数据包；**不能调用它进行 JS 中文合成**。当前 `createEnglishSynthesizer` 只面向 en-us，M12 的 en-us 文本→命令集成也尚未达到 C/JS PCM exact。
+`cmn` profile 可以独立选择并生成/校验数据包；`createCmnSynthesizer` 已可执行固定语料范围内的完整 JS 中文合成。en-us 与 cmn 均使用同一 Canvas/Generate/Wavegen 运行时；两者的 Vela/QuickJS 真机表现仍需分别验收。
 
 ## 差分结果
 
@@ -93,20 +103,16 @@ const enUs = selectLanguageDataProfile('en-us'); // jsRuntimeStatus === 'partial
 
 ## 未完成与验收边界
 
-- **cmn JS 前端未完成**：`CalcPitches_Tone` 切片已 exact；`TranslateClause`、cmn ideograph/tone tokenizer、MakePhonemeList/Generate/Wavegen 参数化与端到端集成均未验收。
-- **en-us M12 前置未闭合**：现有 JS 文本→命令路径在英文上与 C PCM 不 exact，因此不能把共享 DSP/运行时结果推广为 cmn。
-- **真机中文出声未验证**：本页没有 Vela/QuickJS 中文合成 APK/RPK，也没有设备听感记录。任何真机中文出声结论都必须由用户确认。
-- **M13/M14 未做**：未裁剪 cmn 数据、未测资源占用和速度、未验证音质损失较低的优化。
-- **数据闭包仍为 false**：固定语料 exact 只证明所选 30 例；动态词典切换和其他未覆盖输入不能宣称支持。
+- **Node 固定语料已闭合，生产闭包仍为 false**：30 例 exact 只证明所选语料；动态词典切换、其他语言混排和未覆盖输入不能宣称支持。
+- **真机中文出声未验证**：`0.6.0-cmn` RPK 已构建并通过静态/逐点校验，但没有设备听感记录。任何中文出声、清晰度或声调正确性结论都必须由用户确认。
+- **设备资源未测**：设备 CPU、heap、RTF、首音、连续运行和文件间隙不可测/未知；Node 数字不能外推。
+- **M13 数据最小化未做**：当前 cmn 数据仍保留完整共享 `phondata/phonindex/phontab/intonations`，未做裁剪优化。
+- **显式 unsupported 必须保留**：`[[en-us]]` 切换缺 `en_dict` 是有意边界，不得被当作 exact 或静默回退。
 
-## 待用户真机验收（前置完成后）
+## 待用户真机验收
 
-在 cmn JS 前端与 M12 集成通过 C/JS exact 并产出可安装 RPK 后，验收步骤应为：
-
-1. 安装标识中包含 commit、构建号和 cmn 数据指纹。
-2. 启动应用，选择 `cmn` profile，输入 `你好，世界。`。
-3. 页面应显示数据读取、合成、WAV 写入/读回和播放事件。
-4. 用户应听到普通话朗读且无明显截断；再测试取消后重复合成。
-5. 用户明确回复“真机中文出声通过/失败”后，才能更新状态。
-
-当前不满足步骤 1 的 JS 合成前置，因此没有可请求的真机中文验收包。
+1. 安装 `org.jspeak.tts.debug.0.6.0-cmn.rpk`，先核对页头 `READY 0.6.0-cmn A B261017T125827`。
+2. 打开后先不点击，确认不闪退。
+3. 点击 `合成 / 播放`，页面应显示六个数据文件读取、合成、WAV 写入/读回和播放事件。
+4. 用户应听到普通话 `你好，世界。` 且无明显截断/失真；再测试 `连续 10 次`、`长文本` 与停止/重启。
+5. 用户明确回复“0.6.0-cmn 真机中文出声通过/失败”后，才能更新状态。构建通过本身只写“待用户真机验收”。

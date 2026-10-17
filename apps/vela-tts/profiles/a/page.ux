@@ -1,12 +1,15 @@
 <template>
   <div class="page">
-    <text class="title">jSpeak TTS 0.6.0-en A</text>
+    <text class="title">{{title}}</text>
     <scroll class="content" scroll-y="true">
       <div class="body">
-        <text class="note">固定英文：Hello world.</text>
+        <text class="note">{{fixedNote}}</text>
         <input class="button" type="button" value="合成 / 播放" onclick="synthesize" />
+        <input class="button" type="button" value="连续 10 次（不播放）" onclick="test10" />
+        <input class="button" type="button" value="连续 20 次（不播放）" onclick="test20" />
+        <input class="button" type="button" value="长文本（约 2K 字符，不播放）" onclick="longText" />
         <input class="button" type="button" value="停止 / 清理" onclick="stopAll" />
-        <text class="note">结果在下方；请记录是否听到英文。</text>
+        <text class="note">结果在下方；RTF=合成耗时/音频时长。设备 heap/CPU 不可测。</text>
         <div class="result" for="item in results">
           <text class="label">{{item.label}}</text>
           <text class="value">{{item.value}}</text>
@@ -19,15 +22,15 @@
 import audio from '@system.audio'
 import file from '@system.file'
 import { DATA_ASSETS } from '../../data-assets'
-import { BUILD_STAMP } from '../../build-stamp'
-import { DICTIONARY_MANIFEST } from '../../dictionary-manifest'
 import { createTtsSession } from '../../tts-service'
 
 export default {
   private: {
+    title: 'jSpeak TTS ' + DATA_ASSETS.versionName + ' A',
+    fixedNote: '固定' + (DATA_ASSETS.language === 'cmn' ? '中文' : '英文') + '：' + DATA_ASSETS.testText,
     results: [
-      { label: '版本', value: 'READY 0.6.0-en A ' + BUILD_STAMP },
-      { label: '数据', value: '候选 ' + DATA_ASSETS.totalDataBytes + 'B；闭包未完成' },
+      { label: '版本', value: 'READY ' + DATA_ASSETS.versionName + ' A ' + DATA_ASSETS.buildStamp },
+      { label: '数据', value: DATA_ASSETS.files.length + ' 文件 / ' + DATA_ASSETS.totalDataBytes + 'B；语言=' + DATA_ASSETS.language },
       { label: '流程', value: 'WAITING' }
     ]
   },
@@ -52,17 +55,31 @@ export default {
     this.session = null
     this.setResult('流程', 'STOPPED')
   },
-  synthesize() {
+  run(options) {
     this.stopAll()
     var token = ++this.runId
-    this.session = createTtsSession(file, audio, DATA_ASSETS, DICTIONARY_MANIFEST, {
+    this.session = createTtsSession(file, audio, DATA_ASSETS, {
       row: (name, value) => { if (token === this.runId) this.setResult(name, value) },
-      listening: () => { if (token === this.runId) this.setResult('听感', 'UNVERIFIED；请记录是否清晰英文') },
+      listening: () => { if (token === this.runId) this.setResult('听感', DATA_ASSETS.listeningNote) },
       done: (message) => { if (token === this.runId) this.setResult('流程', message) },
       fail: (message) => { if (token === this.runId) this.setResult('流程', 'FAIL ' + message) },
       shouldContinue: () => token === this.runId && !this.destroyed
-    }, BUILD_STAMP)
-    this.session.start()
+    })
+    this.session.start(options)
+  },
+  synthesize() {
+    this.run({ text: DATA_ASSETS.testText, repeat: 1, play: true })
+  },
+  test10() {
+    this.run({ text: DATA_ASSETS.testText, repeat: 10, play: false })
+  },
+  test20() {
+    this.run({ text: DATA_ASSETS.testText, repeat: 20, play: false })
+  },
+  longText() {
+    var text = DATA_ASSETS.testText
+    while (text.length < 2048) text += DATA_ASSETS.testText
+    this.run({ text: text, repeat: 1, play: false })
   }
 }
 </script>
