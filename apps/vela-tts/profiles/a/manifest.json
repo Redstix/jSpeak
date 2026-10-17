@@ -1,8 +1,8 @@
 {
   "package": "org.jspeak.tts",
   "name": "jSpeak TTS测试",
-  "versionName": "0.5.3-a",
-  "versionCode": 14,
+  "versionName": "0.6.0-en",
+  "versionCode": 17,
   "minPlatformVersion": 1200,
   "icon": "/common/logo.png",
   "deviceTypeList": ["watch"],
@@ -12,6 +12,7 @@
     "designWidth":432,
     "jspeakProfile": {
       "variant":"A",
+      "language":"en-us",
       "quality":"full",
       "runtime":"full-js-synthesis",
       "sampleRate":22050,

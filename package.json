@@ -76,7 +76,7 @@
     "language:cmn:verify": "node tools/build-language/verify.mjs",
     "probe:build": "npm run data:build && npm run assets --prefix apps/vela-probe && npm run build --prefix apps/vela-probe",
     "probe:source": "node tools/probe/source-bundle.mjs",
-    "tts:profiles": "node --expose-gc tools/build-vela-tts-profiles/build.mjs",
+    "tts:build": "node --expose-gc tools/build-vela-tts-profiles/build.mjs",
     "number:build": "node tools/build-number/build.mjs",
     "oracle:number:build": "node tools/oracle/number-build.mjs",
     "test:number": "node tools/oracle/number-selfcheck.mjs",

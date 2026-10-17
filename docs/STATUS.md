@@ -6,6 +6,7 @@
 
 - **0.5.3-A 真机通过**：用户确认「a档rpk真机测试通过，有清晰hello，world声音」。这只证明 A 档固定英文的启动/合成/播放/听感可用；未提供页头逐行数据，设备 CPU/heap/RTF 仍不可测/未知，M12 的 C/JS PCM exact 仍未闭合。
 - **B/C 档取消**：用户决定下一版不再提供预合成播放档，只保留 A 档完整 JS 合成。B/C 未做真机验收，0.5.3 B/C 构建仅作历史记录。
+- 2026-10-17 M1 已完成 A-only 构建：B/C profile、降采样/预生成音频分支与测试断言已删除；`npm run tts:profiles` 改为 `npm run tts:build`，只产 A 档完整 JS 合成。`0.6.0-en` RPK 630034B / 解包 1315832B / SHA256 `dbdb820b137ef4329970411ac83f76cb7a3fdd264639de44d1e54dfb3ba9f2f7`，构建戳 `B261017T055725`，versionName/Code `0.6.0-en`/17；启动解析代理 360750B，首次点击整读 898009B。`npm test` 277/277、0 fail、0 skip；待用户真机验收。
 - 下一版范围：普通话（cmn）合成、合成速度/性能/压力测试；由 Codex 执行，完成即 commit + push。
 
 ## 2026-10-15 本轮核查（实测，非文档推断）
@@ -101,7 +102,7 @@
 
 ## 下一步
 
-0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、三档 RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。0.5.3 A/B/C 的真机启动、播放与听感仍待用户验收。
+0. **接手第一件事**：按 [HANDOVER](HANDOVER.md) §0 重建环境（C Oracle、apps 依赖、A-only RPK），再复跑 `npm test` 与 `npm run data:verify` 确认基线一致；不要假定 clone 后 `dist/`/`artifacts/`/`upstream/` 存在。0.6.0-en 的真机启动、播放与听感仍待用户验收。
 1. M12：完成真机端到端验收后，继续把集成文本→命令计划对齐C Oracle（当前 JS 22809 样本 vs C 23190，首个差异样本 1384）；再补P1性能观察。D1的685ms hash峰值另轮调查，不能因可读可播宣称实时通过。
 2. 闭合M12英文C/JS exact，再参数化/移植cmn前端；完成前不得宣称真机中文出声。
 3. M13数据最小化（未开始）、M14设备资源/RTF证据与S1稳定性、M16维护演练纳入首发。M15完整JS/真机验收继续单列跟踪。

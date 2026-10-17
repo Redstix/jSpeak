@@ -69,57 +69,6 @@ export function makePcmWav(samples, sampleRate) {
   return bytes;
 }
 
-export function downsampleWav(bytes, factor, sampleRate) {
-  const source = parsePcmWav(bytes);
-  if (!Number.isInteger(factor) || factor < 2) throw new Error('Expected integer factor >= 2');
-  const output = new Int16Array(Math.ceil(source.samples.length / factor));
-  for (let index = 0; index < output.length; index++) {
-    const start = index * factor;
-    const end = Math.min(start + factor, source.samples.length);
-    let sum = 0;
-    for (let offset = start; offset < end; offset++) sum += source.samples[offset];
-    output[index] = Math.round(sum / (end - start));
-  }
-  return makePcmWav(output, sampleRate);
-}
-
-function rms(values) {
-  let sum = 0;
-  for (const value of values) sum += value * value;
-  return Math.sqrt(sum / values.length);
-}
-
-export function audioQualityMetrics(originalBytes, reducedBytes, factor) {
-  const original = parsePcmWav(originalBytes);
-  const reduced = parsePcmWav(reducedBytes);
-  const reconstructed = new Int16Array(original.samples.length);
-  for (let index = 0; index < reconstructed.length; index++) {
-    reconstructed[index] = reduced.samples[Math.floor(index / factor)];
-  }
-  const errors = new Int16Array(original.samples.length);
-  let peakError = 0;
-  for (let index = 0; index < errors.length; index++) {
-    const error = original.samples[index] - reconstructed[index];
-    errors[index] = error;
-    peakError = Math.max(peakError, Math.abs(error));
-  }
-  const originalRms = rms(original.samples);
-  const errorRms = rms(errors);
-  return {
-    sampleCountRatio: Number((reduced.samples.length / original.samples.length).toFixed(6)),
-    wavBytesRatio: Number((reducedBytes.length / originalBytes.length).toFixed(6)),
-    nyquistHz: reduced.sampleRate / 2,
-    boxFilterGainAtNyquistDb: Number((20 * Math.log10(
-      Math.abs(Math.sin(Math.PI * factor * 0.5 / factor) / (factor * Math.sin(Math.PI * 0.5 / factor)))
-    )).toFixed(3)),
-    reconstructionSnrDb: errorRms === 0 ? null : Number((20 * Math.log10(originalRms / errorRms)).toFixed(3)),
-    reconstructionPeakError: peakError,
-    originalDurationMs: Number((original.samples.length / original.sampleRate * 1000).toFixed(3)),
-    reducedDurationMs: Number((reduced.samples.length / reduced.sampleRate * 1000).toFixed(3)),
-    bitsPerSample: reduced.bitsPerSample
-  };
-}
-
 async function generateReferenceAudio() {
   const dictionaryManifest = JSON.parse(readFileSync(new URL('../../data/dictionary/manifest.json', import.meta.url)));
   const synthesizer = createEnglishSynthesizer({
@@ -135,26 +84,20 @@ async function generateReferenceAudio() {
   return { bytes: result.wav, sampleCount: result.pcm.length, commandCount: result.stats.producedCommands };
 }
 
-function stageProfile(variant, audioBytes) {
+function stageProfile() {
   mkdirSync(path.join(APP, 'src/pages/index'), { recursive: true });
-  copyFileSync(path.join(APP, 'profiles', variant, 'manifest.json'), path.join(APP, 'src/manifest.json'));
-  copyFileSync(path.join(APP, 'profiles', variant, 'page.ux'), path.join(APP, 'src/pages/index/index.ux'));
+  copyFileSync(path.join(APP, 'profiles/a/manifest.json'), path.join(APP, 'src/manifest.json'));
+  copyFileSync(path.join(APP, 'profiles/a/page.ux'), path.join(APP, 'src/pages/index/index.ux'));
   rmSync(path.join(APP, 'src/common/espeak'), { recursive: true, force: true });
-  rmSync(path.join(APP, 'src/common/jspeak'), { recursive: true, force: true });
-  if (variant === 'a') {
-    mkdirSync(path.join(APP, 'src/common/espeak'), { recursive: true });
-    for (const name of RUNTIME_DATA) copyFileSync(path.join(SOURCE_DATA, name), path.join(APP, 'src/common/espeak', name));
-  } else {
-    mkdirSync(path.join(APP, 'src/common/jspeak'), { recursive: true });
-    writeFileSync(path.join(APP, 'src/common/jspeak/audio.wav'), audioBytes);
-  }
+  mkdirSync(path.join(APP, 'src/common/espeak'), { recursive: true });
+  for (const name of RUNTIME_DATA) copyFileSync(path.join(SOURCE_DATA, name), path.join(APP, 'src/common/espeak', name));
 }
 
 function expectedRpkName(manifest) {
   return `${manifest.package}.debug.${manifest.versionName}.rpk`;
 }
 
-function buildRpk(variant) {
+function buildRpk() {
   rmSync(path.join(APP, 'build'), { recursive: true, force: true });
   execFileSync(path.join(APP, 'node_modules/.bin/aiot'), ['build', '--devtool', 'false'], {
     cwd: APP, stdio: 'inherit'
@@ -176,26 +119,20 @@ function readZip(rpk, name) {
   return execFileSync('unzip', ['-p', rpk, name], { maxBuffer: 16 * 1024 * 1024 });
 }
 
-function validateRpk(rpk, variant, stamp, audioBytes) {
+function validateRpk(rpk, stamp, versionName) {
   const manifest = JSON.parse(readZip(rpk, 'manifest.json'));
   const page = readZip(rpk, 'pages/index/index.js').toString('utf8');
   const names = new Set(zipNames(rpk));
-  if (manifest.config?.jspeakProfile?.variant !== variant.toUpperCase()) throw new Error(`Profile mismatch in ${rpk}`);
-  if (!page.includes(`READY 0.5.3-${variant.toUpperCase()}`) || !page.includes(stamp)) {
+  if (manifest.config?.jspeakProfile?.runtime !== 'full-js-synthesis') throw new Error(`Profile mismatch in ${rpk}`);
+  if (!page.includes(`READY ${versionName} A`) || !page.includes(stamp)) {
     throw new Error(`Version or build stamp missing in ${rpk}`);
   }
-  if (variant === 'a') {
-    for (const name of RUNTIME_DATA) if (!names.has(`common/espeak/${name}`)) throw new Error(`Missing ${name} in ${rpk}`);
-    for (const name of ['provenance.json', 'candidate-comparison.json', 'oracle.wav', 'oracle-wave.txt']) {
-      if (names.has(`common/espeak/${name}`)) throw new Error(`Build-time asset ${name} must not ship in A profile`);
-    }
-    if (!page.includes('english-synthesis')) throw new Error('A profile lost the synthesis runtime');
-  } else {
-    if (!names.has('common/jspeak/audio.wav')) throw new Error(`Missing reduced audio in ${rpk}`);
-    if (sha256(readZip(rpk, 'common/jspeak/audio.wav')) !== sha256(audioBytes)) throw new Error(`Reduced audio mismatch in ${rpk}`);
-    if ([...names].some(name => name.startsWith('common/espeak/'))) throw new Error(`Reduced profile ships espeak data in ${rpk}`);
-    if (page.includes('readArrayBuffer') || page.includes('english-synthesis')) throw new Error(`Reduced profile retained startup synthesis/I/O path in ${rpk}`);
+  for (const name of RUNTIME_DATA) if (!names.has(`common/espeak/${name}`)) throw new Error(`Missing ${name} in ${rpk}`);
+  for (const name of ['provenance.json', 'candidate-comparison.json', 'oracle.wav', 'oracle-wave.txt']) {
+    if (names.has(`common/espeak/${name}`)) throw new Error(`Build-time asset ${name} must not ship in full synthesis profile`);
   }
+  if ([...names].some(name => name.startsWith('common/jspeak/'))) throw new Error(`Retired precomputed audio found in ${rpk}`);
+  if (!page.includes('english-synthesis')) throw new Error('Full synthesis profile lost the synthesis runtime');
 }
 
 function zipEntryCount(rpk) {
@@ -208,70 +145,44 @@ async function buildProfiles() {
   if (!stampMatch) throw new Error('Build stamp generation failed');
   const stamp = stampMatch[0];
   const reference = await generateReferenceAudio();
-  const bAudio = downsampleWav(reference.bytes, 2, 11025);
-  const cAudio = downsampleWav(reference.bytes, 4, 5512);
 
-  const artifactDirectory = path.join(ROOT, 'artifacts', `vela-tts-profiles-${stamp}`);
+  const artifactDirectory = path.join(ROOT, 'artifacts', `vela-tts-${stamp}`);
   mkdirSync(artifactDirectory, { recursive: true });
-  writeFileSync(path.join(artifactDirectory, 'a-reference.wav'), reference.bytes);
-  writeFileSync(path.join(artifactDirectory, 'b.wav'), bAudio);
-  writeFileSync(path.join(artifactDirectory, 'c.wav'), cAudio);
+  writeFileSync(path.join(artifactDirectory, 'reference.wav'), reference.bytes);
   rmSync(DIST, { recursive: true, force: true });
   mkdirSync(DIST, { recursive: true });
 
-  const audioByVariant = { a: reference.bytes, b: bAudio, c: cAudio };
   const profiles = [];
-  for (const variant of ['a', 'b', 'c']) {
-    stageProfile(variant, audioByVariant[variant]);
-    const rpk = buildRpk(variant);
-    validateRpk(rpk, variant, stamp, audioByVariant[variant]);
-    copyFileSync(rpk, path.join(artifactDirectory, `${variant}.rpk`));
-    const startup = benchmarkVelaStartup(rpk);
-    const manifest = JSON.parse(readFileSync(path.join(APP, 'src/manifest.json')));
-    const buildManifest = JSON.parse(readFileSync(path.join(APP, 'build/manifest.json')));
-    profiles.push({
-      variant: variant.toUpperCase(),
-      rpk,
-      rpkBytes: startup.rpk.bytes,
-      rpkSha256: startup.rpk.sha256,
-      unpackedBytes: startup.rpk.uncompressedBytes,
-      buildStamp: stamp,
-      buildTimestamp: buildManifest.packageInfo.timeStamp,
-      versionName: manifest.versionName,
-      versionCode: manifest.versionCode,
-      runtime: manifest.config.jspeakProfile.runtime,
-      sampleRate: manifest.config.jspeakProfile.sampleRate,
-      bitsPerSample: manifest.config.jspeakProfile.bitsPerSample,
-      actionReadBytes: manifest.config.jspeakProfile.actionReadBytes,
-      outputAudioBytes: audioByVariant[variant].length,
-      packagedAudioBytes: variant === 'a' ? 0 : audioByVariant[variant].length,
-      packageFileCount: zipEntryCount(rpk),
-      audioSha256: sha256(audioByVariant[variant]),
-      startup
-    });
-  }
-
-  stageProfile('a', reference.bytes);
-  for (const profile of profiles) {
-    copyFileSync(path.join(artifactDirectory, `${profile.variant.toLowerCase()}.rpk`), profile.rpk);
-  }
+  stageProfile();
+  const rpk = buildRpk();
+  const manifest = JSON.parse(readFileSync(path.join(APP, 'src/manifest.json')));
+  validateRpk(rpk, stamp, manifest.versionName);
+  copyFileSync(rpk, path.join(artifactDirectory, 'tts.rpk'));
+  const startup = benchmarkVelaStartup(rpk);
+  const buildManifest = JSON.parse(readFileSync(path.join(APP, 'build/manifest.json')));
+  profiles.push({
+    variant: 'A',
+    rpk,
+    rpkBytes: startup.rpk.bytes,
+    rpkSha256: startup.rpk.sha256,
+    unpackedBytes: startup.rpk.uncompressedBytes,
+    buildStamp: stamp,
+    buildTimestamp: buildManifest.packageInfo.timeStamp,
+    versionName: manifest.versionName,
+    versionCode: manifest.versionCode,
+    runtime: manifest.config.jspeakProfile.runtime,
+    sampleRate: manifest.config.jspeakProfile.sampleRate,
+    bitsPerSample: manifest.config.jspeakProfile.bitsPerSample,
+    actionReadBytes: manifest.config.jspeakProfile.actionReadBytes,
+    outputAudioBytes: reference.bytes.length,
+    packagedAudioBytes: 0,
+    packageFileCount: zipEntryCount(rpk),
+    audioSha256: sha256(reference.bytes),
+    startup
+  });
   const commit = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const branch = execFileSync('git', ['-C', ROOT, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim();
-  const quality = {
-    b: audioQualityMetrics(reference.bytes, bAudio, 2),
-    c: audioQualityMetrics(reference.bytes, cAudio, 4)
-  };
   const profileA = profiles[0];
-  const relativeToA = {};
-  for (const profile of profiles) {
-    relativeToA[profile.variant] = {
-      parseSourceBytesRatio: profile.startup.rpk.parseSourceBytes / profileA.startup.rpk.parseSourceBytes,
-      firstActionReadBytesRatio: profile.actionReadBytes / profileA.actionReadBytes,
-      rpkBytesRatio: profile.rpkBytes / profileA.rpkBytes,
-      unpackedBytesRatio: profile.unpackedBytes / profileA.unpackedBytes,
-      outputAudioBytesRatio: profile.outputAudioBytes / profileA.outputAudioBytes
-    };
-  }
   const identity = {
     schemaVersion: 1,
     branch,
@@ -284,8 +195,8 @@ async function buildProfiles() {
       wavBytes: reference.bytes.length,
       sha256: sha256(reference.bytes)
     },
-    quality,
-    relativeToA,
+    runtimeProfiles: ['A'],
+    retiredRuntimeProfiles: ['B', 'C'],
     profiles
   };
   writeFileSync(path.join(DIST, 'profiles.json'), JSON.stringify(identity, null, 2) + '\n');
@@ -301,7 +212,7 @@ if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1]).
       commit: report.commit,
       buildStamp: report.buildStamp,
       profiles: report.profiles.map(profile => ({
-        variant: profile.variant,
+        versionName: profile.versionName,
         rpk: profile.rpk,
         bytes: profile.rpkBytes,
         sha256: profile.rpkSha256,
