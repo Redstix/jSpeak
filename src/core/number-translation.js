@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2015 Jonathan Duddington;
 // 2015-2016, 2020 Reece H. Dunn. See licenses/espeak-ng/COPYING.txt.
 import { NUMBER_PROFILE as P, NUMBER_CONSTANTS as C } from '../../data/number/profile.js';
+import { CMN_NUMBER_PROFILE } from '../../data/cmn/synthesis-profile.js';
 import { DICTIONARY_CONSTANTS as D } from '../../data/dictionary/profile.js';
 import { readForward } from './utf8-scan.js';
 import { isAlpha } from './unicode.js';
@@ -17,6 +18,9 @@ var END=String.fromCharCode(C.phonEND_WORD),PAUSE=String.fromCharCode(C.phonPAUS
 export function createNumberTranslation(dictionarySession, options) {
   if(!dictionarySession||typeof dictionarySession.lookup!=='function'||typeof dictionarySession.setState!=='function')throw new TypeError('Expected dictionary session');
   var opts=options||{},missing=0,numberControl=0,nDigit=0,ordinal2='',ordinal2x='',digitLookup='',context={};
+  var numberProfile=opts.profile||P;
+  var knownProfiles={ 'en-us':P,cmn:CMN_NUMBER_PROFILE };
+  if(!knownProfiles[numberProfile.voice]||JSON.stringify(numberProfile)!==JSON.stringify(knownProfiles[numberProfile.voice]))throw new Error('Unsupported number profile');
   function state(){return {speakMissingThousands:missing,numberControl:numberControl,nDigitLookup:nDigit,ordinal2:bytes(ordinal2),ordinal2x:bytes(ordinal2x)};}
   function setState(s){
     if(!s||typeof s!=='object')throw new TypeError('Expected number state');
@@ -28,7 +32,7 @@ export function createNumberTranslation(dictionarySession, options) {
     if(s.ordinal2!==undefined)ordinal2=binary(s.ordinal2);
     if(s.ordinal2x!==undefined)ordinal2x=binary(s.ordinal2x);
   }
-  function dictSettings(){return {dictCondition:context.dictCondition===undefined?P.dictCondition:context.dictCondition,
+  function dictSettings(){return {dictCondition:context.dictCondition===undefined?numberProfile.dictCondition:context.dictCondition,
     expectVerb:(context.expectVerb||0)>>>0,expectVerbS:(context.expectVerbS||0)>>>0,expectNoun:(context.expectNoun||0)>>>0,expectPast:(context.expectPast||0)>>>0,
     prevDictFlags:context.prevDictFlags0||0,clauseTerminator:context.clauseTerminator||0};}
   function lookup(key){
@@ -147,7 +151,7 @@ export function createNumberTranslation(dictionarySession, options) {
     var raw=binary(word.subarray(offset)),match=raw.match(/^[\t\n\v\f\r ]*[+-]?\d+/),value=match?Number(match[0]):NaN;
     if(value<0)fail('negative-source');
     if(!Number.isFinite(value)||value>2147483647)return {found:0,ph:initial};
-    var previous=(n===3&&at(-2)===P.thousandsSeparator&&digit(at(-3)))?1:0;
+    var previous=(n===3&&at(-2)===numberProfile.thousandsSeparator&&digit(at(-3)))?1:0;
     if(!previous)missing=0;
     ordinal2='';var zeros='',ordinal=0,ix=n,skip=0;
     if(at(ix)===46&&!digit(at(ix+1))&&!digit(at(ix+2))&&(remaining<=1||!(words[1].flags&C.FLAG_NOSPACE)))word[offset+ix]=0;
@@ -155,19 +159,19 @@ export function createNumberTranslation(dictionarySession, options) {
     while(at(ix)&&at(ix)!==32&&ix<29)suffix+=String.fromCharCode(at(ix++));
     if(suffix&&!digit(suffix.charCodeAt(0))){var sr=lookup('_#'+suffix);ordinal2=sr.ph;if(sr.found){ordinal=2;flags[0]|=C.FLAG_SKIPWORDS;skip=1;ordinal2x=lookup('_x#'+suffix).ph;}}
     if(words[0].flags&C.FLAG_ORDINAL)ordinal=2;
-    if(at(0)===48&&!previous&&at(1)!==32&&at(1)!==P.decimalSeparator){
+    if(at(0)===48&&!previous&&at(1)!==32&&at(1)!==numberProfile.decimalSeparator){
       if(!(n===2&&at(3)===58&&digit(at(5))&&[9,10,11,12,13,32].indexOf(at(7))>=0)){
         if(n>3){flags[0]=(flags[0]&~C.FLAG_SKIPWORDS)>>>0;return {found:0,ph:initial};}
         for(ix=0;at(ix)===48&&ix<n-1;ix++)zeros+=lookup('_0').ph;
       }
     }
-    var inc=at(n)===P.thousandsSeparator?2:0,plex=0,exact=1;
+    var inc=at(n)===numberProfile.thousandsSeparator?2:0,plex=0,exact=1;
     if(inc){var di=n+inc;while(plex+1<remaining&&!(words[plex+1].flags&C.FLAG_MULTIPLE_SPACES)&&digit(at(di))&&digit(at(di+1))&&digit(at(di+2))&&!digit(at(di+3))&&!digit(at(di-1))){
       for(ix=0;ix<3;ix++)if(at(di+ix)!==48){exact=0;break;}
       plex++;di+=3;if(at(di)===P.thousandsSeparator)di+=inc;else break;
     }}
     var suppress=value===0&&!!previous,append='',decimal=0,r;
-    if(at(n)===P.decimalSeparator&&digit(at(n+1))){append=lookup('_dpt').ph;decimal=256;}
+    if(at(n)===numberProfile.decimalSeparator&&digit(at(n+1))){append=lookup('_dpt').ph;decimal=256;}
     else if(!suppress){if(inc&&plex>0){r=thousands(value,plex,exact);append=r.ph;if(r.found){value=0;suppress=true;}}}
     else if(missing===1){if(!lookup('_0M'+(plex+1)).found)append=lookup('_0M'+plex).ph;}
     if(!append&&at(n)===46&&plex===0)append=lookup('_.').ph;
@@ -189,7 +193,7 @@ export function createNumberTranslation(dictionarySession, options) {
       while(digit(c=at(n))&&ph.length<190){var v=at(n++)-48,part=num2(v,0,2);if(ph.length+1+part.length+1>capacity){stop=true;break;}ph+=END+part;}
       if(stop)break;
       r=lookup('_dpt2');if(r.found){if(ph.length+r.ph.length+1>capacity){stop=true;break;}ph+=r.ph;}
-      if(c===P.decimalSeparator&&digit(at(n+1))){r=lookup('_dpt');if(ph.length+r.ph.length+1>capacity){stop=true;break;}ph+=r.ph;}else decimal=0;
+      if(c===numberProfile.decimalSeparator&&digit(at(n+1))){r=lookup('_dpt');if(ph.length+r.ph.length+1>capacity){stop=true;break;}ph+=r.ph;}else decimal=0;
     }
     if(ph&&ph.charCodeAt(0)!==C.phonSWITCH){var next=readForward(word,offset+n+1).codepoint;if(!isAlpha(next)&&!exact){if(ph.length+2>capacity)ph=ph.slice(0,capacity-2);ph+=PAUSE;}}
     flags[0]=(flags[0]|C.FLAG_FOUND)>>>0;missing=(missing-1)|0;if(skip)dictionarySession.setState({skipWords:skip});return {found:1,ph:ph};
@@ -211,7 +215,7 @@ export function createNumberTranslation(dictionarySession, options) {
         if(prev&&prev<value){if(acc%10!==0||prev*10<value){valid=false;break;}subtract=prev;value-=subtract;}
         else if(value>=subtract){valid=false;break;}else acc+=prev;prev=value;
       }
-      if(valid){p++;acc+=prev;if(digit(word[p])||acc<P.minRoman||acc>P.maxRoman)valid=false;}
+      if(valid){p++;acc+=prev;if(digit(word[p])||acc<numberProfile.minRoman||acc>numberProfile.maxRoman)valid=false;}
       result={found:0,ph:''};
       if(valid){
         var romanPh=lookup('_roman').ph;result.ph=romanPh;

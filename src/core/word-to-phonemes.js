@@ -25,8 +25,10 @@ function copyWords(words) {
 // update the latter even though TranslateWord2's parameter has the same C name.
 export function createWordToPhonemesSession(services, table, list, profile, initial) {
   if (!services || !services.wordTranslation || !list || typeof list.appendWord !== 'function') throw new TypeError('Expected word and phoneme-list services');
-  if (!table || table.index !== 80 || table.name !== 'en-us') throw new TypeError('Expected en-us phoneme table');
+  if (!table || !Array.isArray(table.entries) || table.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   if (!profile || !Number.isInteger(profile.combineWords)) throw new TypeError('Expected generated clause profile');
+  if (profile.phonemeTable !== undefined && profile.voice !== undefined &&
+      (table.index !== profile.phonemeTable || table.name !== profile.voice)) throw new TypeError('Phoneme table differs from clause profile');
   var wordsService = services.wordTranslation, settings = initial || {};
   var embeddedRead = integer(settings.embeddedRead === undefined ? 0 : settings.embeddedRead, 0, 250, 'embedded read');
   var optionEmphasis = integer(settings.optionEmphasis === undefined ? 0 : settings.optionEmphasis, -2147483648, 2147483647, 'emphasis');

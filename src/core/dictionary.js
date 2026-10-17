@@ -7,6 +7,10 @@ import { readForward } from './utf8-scan.js';
 import { isAlpha } from './unicode.js';
 
 const COMMIT = 'ba90c8e9f440ad544f674a790bb5f53878b6ffc5';
+const DICTIONARY_IDENTITIES = Object.freeze({
+  'en-us': Object.freeze({ language: 'en', voice: 'en-us' }),
+  cmn: Object.freeze({ language: 'cmn', voice: 'cmn' })
+});
 export { DICTIONARY_CONSTANTS } from '../../data/dictionary/profile.js';
 function cLength(bytes, start) { var i = start || 0; while (i < bytes.length && bytes[i]) i++; return i - (start || 0); }
 function same(a, aStart, b, bStart, count) {
@@ -47,7 +51,9 @@ export function transposeDictionaryWord(bytes) {
   return { bytes: word, length: target | 0x40 };
 }
 export function loadDictionary(bytes, manifest) {
-  if (!manifest || manifest.magic !== 'JSPEAK_RAW_DICTIONARY' || manifest.schemaVersion !== 1 || manifest.format !== 'espeak-ng-dict-v1' || manifest.language !== 'en' || manifest.voice !== 'en-us' || manifest.upstreamCommit !== COMMIT || manifest.hashSpec !== 'xorshift32-byte-mix-seed0') throw new Error('Incompatible dictionary manifest');
+  if (!manifest || manifest.magic !== 'JSPEAK_RAW_DICTIONARY' || manifest.schemaVersion !== 1 || manifest.format !== 'espeak-ng-dict-v1' || manifest.upstreamCommit !== COMMIT || manifest.hashSpec !== 'xorshift32-byte-mix-seed0') throw new Error('Incompatible dictionary manifest');
+  const identity = DICTIONARY_IDENTITIES[manifest.voice];
+  if (!identity || manifest.language !== identity.language || manifest.voice !== identity.voice) throw new Error('Incompatible dictionary manifest');
   var binary = createBinaryReader(bytes);
   if (bytes.length !== manifest.byteLength || byteHash32(bytes) !== manifest.hash32) throw new Error('Dictionary length/checksum mismatch');
   if (binary.u32(0) !== 1024 || bytes.length <= 1032) throw new Error('Invalid dictionary header');
@@ -118,10 +124,12 @@ export function createDictionarySession(dictionary, options) {
   if (!dictionary || !(dictionary.bytes instanceof Uint8Array) || !(dictionary.buckets instanceof Uint32Array)) throw new TypeError('Expected loaded dictionary');
   var opts = options || {};
   if (typeof opts !== 'object' || Array.isArray(opts)) throw new TypeError('Expected dictionary options');
-  for (var option in opts) if (option !== 'lookupAccentedLetter') throw new TypeError('Unknown dictionary option: ' + option);
+  for (var option in opts) if (option !== 'lookupAccentedLetter' && option !== 'dictCondition' && option !== 'textmode') throw new TypeError('Unknown dictionary option: ' + option);
   if (opts.lookupAccentedLetter !== undefined && typeof opts.lookupAccentedLetter !== 'function') throw new TypeError('Expected accented-letter callback');
+  if (opts.dictCondition !== undefined && (!Number.isInteger(opts.dictCondition) || opts.dictCondition < 0 || opts.dictCondition > 0xffffffff)) throw new RangeError('Invalid dictionary condition');
+  if (opts.textmode !== undefined && typeof opts.textmode !== 'boolean') throw new TypeError('Expected dictionary textmode boolean');
   var repeat = new Uint8Array(0), repeatCount = 0, skipWords = 0;
-  var context = { dictCondition: 72, expectVerb: 0, expectVerbS: 0, expectNoun: 0, expectPast: 0, prevDictFlags: 0, clauseTerminator: 0 };
+  var context = { dictCondition: opts.dictCondition === undefined ? 72 : opts.dictCondition, expectVerb: 0, expectVerbS: 0, expectNoun: 0, expectPast: 0, prevDictFlags: 0, clauseTerminator: 0 };
   function setContext(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Expected dictionary context');
     for (var key in value) {
@@ -271,6 +279,7 @@ export function createDictionarySession(dictionary, options) {
       }
     }
     if (found >= 0) {
+      if (opts.textmode === true) flags[0] = (flags[0] ^ F.FLAG_TEXTMODE) >>> 0;
       if (flags[0] & F.FLAG_TEXTMODE) {
         if (endFlags & F.FLAG_ALLOW_TEXTMODE) { replacement = new Uint8Array(phonemes.length + 1); replacement.set(phonemes); replacement[phonemes.length] = 32; }
         phonemes = new Uint8Array(0); return finish(0);

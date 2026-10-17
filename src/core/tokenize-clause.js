@@ -26,11 +26,19 @@ export function createClauseTokenizer(options) {
   var keys = Object.keys(opts);
   for (var i = 0; i < keys.length; i++) {
     if (keys[i] === 'embedded') continue;
-    if (keys[i] !== 'voice' || opts.voice !== 'en-us') throw new Error('Unsupported tokenizer profile option: ' + keys[i]);
+    if (keys[i] === 'voice') {
+      if (opts.voice !== 'en-us' && opts.voice !== 'cmn') throw new Error('Unsupported tokenizer profile option: voice');
+      continue;
+    }
+    if (keys[i] !== 'profile') throw new Error('Unsupported tokenizer profile option: ' + keys[i]);
   }
   var embedded = opts.embedded === undefined ? createEmbeddedSession() : opts.embedded;
   if (!embedded || typeof embedded.consume !== 'function' || typeof embedded.beginClause !== 'function' || typeof embedded.state !== 'function') throw new TypeError('Expected embedded session');
-  var characters = createTextCharacterSession();
+  var characterProfile = opts.profile;
+  if (characterProfile !== undefined && (characterProfile === null || typeof characterProfile !== 'object' ||
+      characterProfile.voice !== opts.voice || !Number.isInteger(characterProfile.toneNumbers))) throw new TypeError('Expected text character profile');
+  var characters = createTextCharacterSession(characterProfile);
+  var toneNumbers = characterProfile === undefined ? 0 : characterProfile.toneNumbers;
   var fault = null;
   function state() { return characters.state(); }
   function unsupported(reason, codepoint, sourceIndex) {
@@ -87,7 +95,7 @@ export function createClauseTokenizer(options) {
     while (!finished && ix < 799) {
       var prevOut2 = prevOut;
       prevOut = readBackward(sbuf, ix - 1).codepoint;
-      // tone_numbers=0, so a preceding number is not reclassified as alphabetic.
+      if (toneNumbers === 1 && iswDigit(prevOut) && isAlpha(prevOut2)) prevOut = 97;
       if (prevInSave !== 0) { prevIn = prevInSave; prevInSave = 0; }
       else if (sourceIndex > 0) prevIn = readBackward(source, sourceIndex - 1).codepoint;
       var prevSourceIndex = sourceIndex;
@@ -134,7 +142,9 @@ export function createClauseTokenizer(options) {
         if (charInserted) nextIn = charInserted;
         if (!isAlpha(c) && !isSpace(c) && c !== 39) {
           if (isAlpha(prevOut)) {
-            if (c === 0x200d && isEmoji(prevOut) && isEmoji(nextIn)) {
+            if (toneNumbers === 1 && iswDigit(c) && !iswDigit(nextIn)) {
+              // Allow a trailing tone digit to remain part of a pinyin word.
+            } else if (c === 0x200d && isEmoji(prevOut) && isEmoji(nextIn)) {
               // Preserve the joiner inside an emoji dictionary token.
             } else if (isEmojiTag(c) && isEmoji(prevOut)) {
               // Preserve the first tag; subsequent tags have non-alpha prevOut.
@@ -168,7 +178,7 @@ export function createClauseTokenizer(options) {
           var alphaC = alphabetFromChar(c), alphaPrev = alphabetFromChar(prevOut);
           var cForeign = alphaC !== null && alphaC.offset !== 0;
           var prevForeign = alphaPrev !== null && alphaPrev.offset !== 0;
-          if (!emojiJoin && (emojiBreak || !isAlpha(prevOut) || shouldSplitIdeographs(c, prevOut) || isEmoji(c) !== isEmoji(prevOut) || cForeign !== prevForeign)) {
+          if (!emojiJoin && (emojiBreak || !isAlpha(prevOut) || shouldSplitIdeographs(c, prevOut, characterProfile) || isEmoji(c) !== isEmoji(prevOut) || cForeign !== prevForeign)) {
             if (prevOut !== 39) letterCount = 0;
             if (prevOut !== 32 && prevOut !== 39) {
               c = 32; spaceInserted = true;
@@ -216,7 +226,9 @@ export function createClauseTokenizer(options) {
           else { singleQuoted = !!isSpace(prevOut); prePauseAdd = 4; c = 32; }
         } else if (c === 95) c = 32; // translate.c:breaks
         else if (iswDigit(c)) {
-          if (prevOut !== 32 && !iswDigit(prevOut)) {
+          if (toneNumbers === 1 && isAlpha(prevOut) && !iswDigit(nextIn)) {
+            // Keep the tone digit attached to the preceding letters.
+          } else if (prevOut !== 32 && !iswDigit(prevOut)) {
             if (prevOut !== 46) { c = 32; spaceInserted = true; }
             else decimalSepCount = true;
           } else if (prevOut === 32 && isAlpha(prevOut2) && !isAlpha(prevIn)) { sbuf[ix++] = 32; starts[wordCount]++; }

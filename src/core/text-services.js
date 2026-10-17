@@ -9,8 +9,13 @@ import { createLetterNames } from './letter-names.js';
 
 export function createEnglishTextServices(dictionary, selectedTable, options) {
   var opts = options || {}, accent, rules, letters;
-  var session = createDictionarySession(dictionary, { lookupAccentedLetter: function (cp, initial) { return accent(cp, initial); } });
-  var stress = createWordStressSession(selectedTable, WORD_STRESS_PROFILE);
+  var stressProfile = opts.stressProfile || WORD_STRESS_PROFILE;
+  var session = createDictionarySession(dictionary, {
+    dictCondition: opts.initialState && opts.initialState.dictCondition,
+    textmode: opts.ruleProfile ? opts.ruleProfile.textmode === 1 : false,
+    lookupAccentedLetter: function (cp, initial) { return accent(cp, initial); }
+  });
+  var stress = createWordStressSession(selectedTable, stressProfile);
   var initial = opts.initialState || {}, dictionaryInitial = {};
   for (var key of ['repeatCount', 'repeat', 'skipWords']) if (initial[key] !== undefined) dictionaryInitial[key] = initial[key];
   session.setState(dictionaryInitial);
@@ -31,8 +36,9 @@ export function createEnglishTextServices(dictionary, selectedTable, options) {
   }
   accent = createLetterAccentLookup(session, { translateRules: translateRules, translateWord: opts.translateWord });
   letters = createLetterNames(accent, stress, { translateRules: translateRules });
-  rules = createDictionaryRulesSession(dictionary, selectedTable, RULE_PROFILE, {
+  rules = createDictionaryRulesSession(dictionary, selectedTable, opts.ruleProfile || RULE_PROFILE, {
     dictionarySession: session,
+    ruleData: opts.ruleData,
     lookup: function (key) { return accent.lookupSymbol(key).phonemes; },
     lookupLetter: function (codepoint, context) { return letters.lookupLetter(codepoint, context); }
   });

@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2014 Jonathan Duddington;
 // 2015-2016 Reece H. Dunn. See licenses/espeak-ng/COPYING.txt.
 import { PHONEME_PREPARE_PROFILE, VOICE_PHONEME_REPLACEMENTS, PHONEME_PREPARE_CONSTANTS as C } from '../../data/phoneme-prepare/profile.js';
+import { CMN_PHONEME_PREPARE_PROFILE, CMN_PHONEME_REPLACEMENTS } from '../../data/cmn/synthesis-profile.js';
 export { PHONEME_PREPARE_PROFILE };
 var BYTE_COLUMNS = ['phcode', 'stresslevel', 'wordstress', 'tonePh'];
 var SHORT_COLUMNS = ['sourceix', 'synthflags'];
@@ -21,10 +22,13 @@ function cloneList(input, capacity) {
   return list;
 }
 export function preparePhonemeList(input, table, profile) {
-  if (!table || table.index !== 80 || table.name !== 'en-us') throw new TypeError('Expected original en-us phoneme table');
+  if (!table || !Array.isArray(table.entries) || table.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   if (!profile) throw new TypeError('Expected explicit initialized preparation profile');
-  var keys = Object.keys(PHONEME_PREPARE_PROFILE);
-  for (var k = 0; k < keys.length; k++) if (profile[keys[k]] !== PHONEME_PREPARE_PROFILE[keys[k]]) throw new Error('Unsupported preparation profile: ' + keys[k]);
+  var knownProfiles = { 'en-us': PHONEME_PREPARE_PROFILE, cmn: CMN_PHONEME_PREPARE_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile) ||
+      table.index !== profile.phonemeTable || table.name !== profile.voice) throw new Error('Unsupported preparation profile');
+  var replacements = profile.voice === 'cmn' ? CMN_PHONEME_REPLACEMENTS : VOICE_PHONEME_REPLACEMENTS;
   var list = cloneList(input, profile.capacity), count = list.length;
   if (list.phcode[count - 2] !== C.phonPAUSE || list.phcode[count - 1] !== C.phonPAUSE) throw new RangeError('Original caller must append two terminating pauses');
   var endSourceIndex = list.sourceix[count - 1], maximum = 0, j;
@@ -69,8 +73,8 @@ export function preparePhonemeList(input, table, profile) {
     if (!(list.synthflags[j] & C.SFLAG_SWITCHED_LANG)) {
       if (j < list.length - 1) next = table.entries[list.phcode[j + 1]];
       var wordEnd = j === list.length - 1 || list.sourceix[j + 1] !== 0 || (next !== null && next.type === 0);
-      for (var r = 0; r < VOICE_PHONEME_REPLACEMENTS.length; r++) {
-        var replacement = VOICE_PHONEME_REPLACEMENTS[r];
+      for (var r = 0; r < replacements.length; r++) {
+        var replacement = replacements[r];
         if (list.phcode[j] !== replacement.oldPhoneme) continue;
         var flags = replacement.flags;
         if ((flags & 1) && !wordEnd) continue;

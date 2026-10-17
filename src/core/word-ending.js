@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2015 Jonathan Duddington.
 // See licenses/espeak-ng/COPYING.txt.
 import { WORD_ENDING_PROFILE, ADD_E_EXCEPTIONS, ADD_E_ADDITIONS } from '../../data/word-ending/profile.js';
+import { CMN_WORD_ENDING_PROFILE } from '../../data/cmn/synthesis-profile.js';
 import { LETTER_BITS, LETTER_GROUPS, REMOVE_ACCENT, RULE_PROFILE } from '../../data/rules/profile.js';
 import { writeUtf8CodePoint } from './unicode.js';
 import { DICTIONARY_CONSTANTS as F } from '../../data/dictionary/profile.js';
@@ -21,8 +22,9 @@ export function removeEnding(input, endType, profile, options) {
   if (!(input instanceof Uint8Array)) throw new TypeError('Expected word Uint8Array');
   int32(endType, 'ending type');
   if (!profile || typeof profile !== 'object') throw new TypeError('Expected explicit initialized ending profile');
-  var keys = Object.keys(WORD_ENDING_PROFILE);
-  for (var k = 0; k < keys.length; k++) if (profile[keys[k]] !== WORD_ENDING_PROFILE[keys[k]]) throw new Error('Unsupported word-ending profile: ' + keys[k]);
+  var knownProfiles = { 'en-us': WORD_ENDING_PROFILE, cmn: CMN_WORD_ENDING_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile)) throw new Error('Unsupported word-ending profile');
   var opts = options || {}, expectVerb = opts.expectVerb === undefined ? 0 : opts.expectVerb;
   var copyWord = opts.copyWord === undefined ? true : opts.copyWord;
   int32(expectVerb, 'expected verb');

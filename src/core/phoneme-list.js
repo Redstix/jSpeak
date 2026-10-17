@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2015 Jonathan Duddington.
 // See licenses/espeak-ng/COPYING.txt.
 import { PHONEME_LIST_PROFILE, PHONEME_LIST_CONSTANTS as C } from '../../data/phoneme-list/profile.js';
+import { CMN_PHONEME_LIST_PROFILE } from '../../data/cmn/synthesis-profile.js';
 import { DICTIONARY_CONSTANTS as F } from '../../data/dictionary/profile.js';
 import { isAlpha } from './unicode.js';
 export { PHONEME_LIST_PROFILE };
@@ -22,10 +23,12 @@ function copyColumn(input, Type, length, label) {
 function lengthOf(bytes) { var n = 0; while (n < bytes.length && bytes[n]) n++; return n; }
 
 export function createPhonemeListSession(table, profile, initial) {
-  if (!table || table.index !== 80 || table.name !== 'en-us') throw new TypeError('Expected original en-us phoneme table');
+  if (!table || !Array.isArray(table.entries) || table.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   if (!profile) throw new TypeError('Expected explicit phoneme-list profile');
-  var keys = Object.keys(PHONEME_LIST_PROFILE);
-  for (var k = 0; k < keys.length; k++) if (profile[keys[k]] !== PHONEME_LIST_PROFILE[keys[k]]) throw new Error('Unsupported phoneme-list profile: ' + keys[k]);
+  var knownProfiles = { 'en-us': PHONEME_LIST_PROFILE, cmn: CMN_PHONEME_LIST_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile) ||
+      table.index !== profile.phonemeTable || table.name !== profile.voice) throw new Error('Unsupported phoneme-list profile');
   var supplied = initial || {}, list = { length: 1 }, current = supplied.state || {}, state = {};
   for (var b = 0; b < BYTE_COLUMNS.length; b++) {
     var byteName = BYTE_COLUMNS[b];

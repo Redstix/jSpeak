@@ -716,6 +716,10 @@ export function createWaveGenerator(options) {
       if (required) throw new TypeError('Missing pitch envelope');
       return null;
     }
+    if (command.b.envelopeBytes instanceof Uint8Array) {
+      if (command.b.envelopeBytes.length < 128) throw new TypeError('Truncated custom envelope');
+      return command.b.envelopeBytes;
+    }
     const index = command.b.envelope;
     if (!Number.isInteger(index) || index < 0 || index >= envelopeData.length) throw new TypeError('Invalid envelope index');
     return envelopeData[index];

@@ -2,6 +2,7 @@
 // Copyright (C) 2005-2015 Jonathan Duddington. GPL-3.0-or-later.
 // See licenses/espeak-ng/COPYING.txt. Phoneme data is supplied by the adapter.
 import { WORD_STRESS_PROFILE } from '../../data/stress/profile.js';
+import { CMN_WORD_STRESS_PROFILE } from '../../data/cmn/synthesis-profile.js';
 export { WORD_STRESS_PROFILE };
 
 var CAPACITY = 200;
@@ -11,10 +12,14 @@ function integer(value, min, max, label) {
   if (!Number.isInteger(value) || value < min || value > max) throw new RangeError('Invalid ' + label);
 }
 function validate(table, profile) {
-  if (!table || table.index !== 80 || table.name !== 'en-us' || !Array.isArray(table.entries) || table.entries.length !== 256) throw new TypeError('Expected selected original en-us phoneme table');
+  if (!table || !Array.isArray(table.entries) || table.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   if (!profile || typeof profile !== 'object') throw new TypeError('Expected explicit initialized stress profile');
-  var keys = Object.keys(WORD_STRESS_PROFILE);
-  for (var i = 0; i < keys.length; i++) if (profile[keys[i]] !== WORD_STRESS_PROFILE[keys[i]]) throw new Error('Unsupported word-stress profile: ' + keys[i]);
+  var knownProfiles = { 'en-us': WORD_STRESS_PROFILE, cmn: CMN_WORD_STRESS_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile) ||
+      table.index !== profile.phonemeTable || table.name !== profile.voice) {
+    throw new Error('Unsupported word-stress profile: ' + profile.voice);
+  }
 }
 function copyInput(bytes) {
   if (!(bytes instanceof Uint8Array)) throw new TypeError('Expected phoneme Uint8Array');

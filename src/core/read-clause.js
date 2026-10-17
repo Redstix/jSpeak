@@ -24,7 +24,9 @@ export function createClauseReader(bytes, options) {
   for (var o = 0; o < keys.length; o++) {
     var key = keys[o];
     if (key === 'dictionary') continue;
-    if ((key !== 'voice' && key !== 'encoding' && key !== 'capacity') || opts[key] !== READ_CLAUSE_PROFILE[key]) throw new Error('Unsupported ReadClause profile option: ' + key);
+    if ((key !== 'voice' && key !== 'encoding' && key !== 'capacity') ||
+        (key === 'voice' && opts.voice !== 'en-us' && opts.voice !== 'cmn') ||
+        (key !== 'voice' && opts[key] !== READ_CLAUSE_PROFILE[key])) throw new Error('Unsupported ReadClause profile option: ' + key);
   }
   var dictionary = opts.dictionary;
   if (dictionary !== undefined && (!dictionary || typeof dictionary.lookupCharName !== 'function' || typeof dictionary.resetRepeat !== 'function' || typeof dictionary.state !== 'function')) throw new TypeError('Expected ReadClause dictionary service');

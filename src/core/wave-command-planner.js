@@ -44,6 +44,7 @@ export const DEFAULT_EN_US_VOICE = Object.freeze({
     return result;
   })(),
 });
+export const DEFAULT_22050_VOICE = DEFAULT_EN_US_VOICE;
 
 function divide(value, divisor) {
   if (!Number.isSafeInteger(value) || !Number.isSafeInteger(divisor) || divisor <= 0) {
@@ -417,15 +418,17 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     if (fmtAmplitude !== 0) { push(C.WCMD_FMT_AMPLITUDE, fmtAmplitude); fmtAmplitude = 0; }
   }
 
-  function doAmplitude(amp, envelope) {
-    lastAmpCommand = push(C.WCMD_AMPLITUDE, 0, envelope === -1 ? null : envelope, amp);
+  function doAmplitude(amp, envelope, envelopeBytes) {
+    const commandEnvelope = envelopeBytes ? { envelopeBytes } : envelope === -1 ? null : { envelope };
+    lastAmpCommand = push(C.WCMD_AMPLITUDE, 0, commandEnvelope, amp);
     ampLength = 0;
   }
 
-  function doPitch(envelope, pitch1, pitch2) {
+  function doPitch(envelope, pitch1, pitch2, envelopeBytes) {
     endPitch(0);
-    if (pitch1 === 255) { pitch1 = 55; pitch2 = 76; envelope = 0; }
-    lastPitchCommand = push(C.WCMD_PITCH, 0, envelope, ((pitch1 << 16) + pitch2) >>> 0);
+    if (pitch1 === 255 && !envelopeBytes) { pitch1 = 55; pitch2 = 76; envelope = 0; }
+    const commandEnvelope = envelopeBytes ? { envelopeBytes } : { envelope };
+    lastPitchCommand = push(C.WCMD_PITCH, 0, commandEnvelope, ((pitch1 << 16) + pitch2) >>> 0);
     pitchLength = 0;
     if (pitch2 < 0) pitch2 = 0;
   }
@@ -587,9 +590,9 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
         doPause(event.length, event.control);
       } else if (event.kind === 'amplitude') {
         beginning = false;
-        doAmplitude(event.amp, event.envelope);
+        doAmplitude(event.amp, event.envelope, event.envelopeBytes);
       }
-      else if (event.kind === 'pitch') doPitch(event.envelope, event.pitch1, event.pitch2);
+      else if (event.kind === 'pitch') doPitch(event.envelope, event.pitch1, event.pitch2, event.envelopeBytes);
       else if (event.kind === 'endPitch') endPitch(event.voiceBreak ? 1 : 0);
       else if (event.kind === 'sample3') doSample3(event);
       else if (event.kind === 'spect2') doSpect2({ ...event });

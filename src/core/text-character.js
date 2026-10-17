@@ -27,13 +27,14 @@ export function alphabetFromChar(cp) {
   }
   return null;
 }
-export function shouldSplitIdeographs(cp, previous) {
+export function shouldSplitIdeographs(cp, previous, profile) {
   uint32(cp); uint32(previous);
-  if (TEXT_CHARACTER_PROFILE.ideographs && (cp > 0x3040 || previous > 0x3040)) return true;
-  if (TEXT_CHARACTER_PROFILE.altAlphabet !== 0) {
+  var supplied = profile || TEXT_CHARACTER_PROFILE;
+  if (supplied.ideographs && (cp > 0x3040 || previous > 0x3040)) return true;
+  if (supplied.altAlphabet !== 0) {
     var currentAlphabet = alphabetFromChar(cp), previousAlphabet = alphabetFromChar(previous);
-    if ((currentAlphabet !== null && currentAlphabet.offset === TEXT_CHARACTER_PROFILE.altAlphabet && (currentAlphabet.flags & ALPHABET_FLAGS.IDEOGRAPHS)) ||
-        (previousAlphabet !== null && previousAlphabet.offset === TEXT_CHARACTER_PROFILE.altAlphabet && (previousAlphabet.flags & ALPHABET_FLAGS.IDEOGRAPHS))) return true;
+    if ((currentAlphabet !== null && currentAlphabet.offset === supplied.altAlphabet && (currentAlphabet.flags & ALPHABET_FLAGS.IDEOGRAPHS)) ||
+        (previousAlphabet !== null && previousAlphabet.offset === supplied.altAlphabet && (previousAlphabet.flags & ALPHABET_FLAGS.IDEOGRAPHS))) return true;
   }
   return false;
 }
@@ -51,27 +52,31 @@ var HANGUL_COMPATIBILITY = new Uint8Array([
 // Keeps the static SubstituteChar counter within one text session. The caller
 // reuses this session across clauses and feeds an inserted code point through
 // TranslateChar again, exactly like TranslateClause's char_inserted path.
-export function createTextCharacterSession() {
+export function createTextCharacterSession(profile) {
+  var supplied = profile || TEXT_CHARACTER_PROFILE;
+  var replacementBytes = supplied === TEXT_CHARACTER_PROFILE ? REPLACEMENT_BYTES :
+    supplied.replacementBytes instanceof Uint8Array ? supplied.replacementBytes : null;
+  if (replacementBytes === null) throw new TypeError('Expected language replacement bytes');
   var ignoreNextN = 0;
-  function lower(cp) { return toLowerCodePoint(cp, TEXT_CHARACTER_PROFILE.dotlessI !== 0); }
+  function lower(cp) { return toLowerCodePoint(cp, supplied.dotlessI !== 0); }
   function findReplacement(c, next, nextOffset) {
     var from = 0;
-    while (REPLACEMENT_BYTES[from] || REPLACEMENT_BYTES[from + 1] || REPLACEMENT_BYTES[from + 2] || REPLACEMENT_BYTES[from + 3]) {
-      var fc = readForward(REPLACEMENT_BYTES, from); from += fc.bytes;
+    while (replacementBytes[from] || replacementBytes[from + 1] || replacementBytes[from + 2] || replacementBytes[from + 3]) {
+      var fc = readForward(replacementBytes, from); from += fc.bytes;
       if (c === fc.codepoint) {
-        if (REPLACEMENT_BYTES[from] === 0) return from + 1;
+        if (replacementBytes[from] === 0) return from + 1;
         var matched = true, nmatched = 0, matchNext = nextOffset;
-        while (REPLACEMENT_BYTES[from] !== 0) {
-          fc = readForward(REPLACEMENT_BYTES, from); from += fc.bytes;
+        while (replacementBytes[from] !== 0) {
+          fc = readForward(replacementBytes, from); from += fc.bytes;
           var nc = readForward(next, matchNext); matchNext += nc.bytes;
           if (lower(nc.codepoint) !== fc.codepoint) matched = false;
           else nmatched++;
         }
         if (matched) { ignoreNextN = nmatched; return from + 1; }
       }
-      while (REPLACEMENT_BYTES[from] !== 0) from++;
+      while (replacementBytes[from] !== 0) from++;
       from++;
-      while (REPLACEMENT_BYTES[from] !== 0) from++;
+      while (replacementBytes[from] !== 0) from++;
       from++;
     }
     return -1;
@@ -82,10 +87,10 @@ export function createTextCharacterSession() {
     var upperCase = iswUpper(c) !== 0;
     var to = findReplacement(upperCase ? lower(c) : c, source, nextOffset);
     if (to < 0) return { codepoint: c, insert: insert, wordFlags: wordFlags };
-    var first = readForward(REPLACEMENT_BYTES, to); to += first.bytes;
+    var first = readForward(replacementBytes, to); to += first.bytes;
     var newC = first.codepoint;
-    if (REPLACEMENT_BYTES[to] !== 0) {
-      var second = readForward(REPLACEMENT_BYTES, to).codepoint;
+    if (replacementBytes[to] !== 0) {
+      var second = readForward(replacementBytes, to).codepoint;
       insert = upperCase && iswUpper(nextIn) ? toUpperCodePoint(second) : second;
     }
     if (upperCase) newC = toUpperCodePoint(newC);

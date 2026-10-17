@@ -9,6 +9,7 @@ import { LETTER_BITS, REMOVE_ACCENT, RULE_PROFILE } from '../../data/rules/profi
 import { getVowelStress, WORD_STRESS_PROFILE } from './word-stress.js';
 import { removeEnding, WORD_ENDING_PROFILE } from './word-ending.js';
 import { createNumberTranslation } from './number-translation.js';
+import { CMN_NUMBER_PROFILE, CMN_WORD_ENDING_PROFILE, CMN_WORD_STRESS_PROFILE, CMN_WORD_TRANSLATION_PROFILE } from '../../data/cmn/synthesis-profile.js';
 import { isSuperscript, nonAsciiNumber, HEX_LETTER_NAMES } from './derived-letter.js';
 import { encodePhonemes } from './phoneme-encode.js';
 
@@ -34,11 +35,16 @@ function cloneWords(words) { return words.map(function (row) { return { flags: r
 function zeroWord() { return { flags: 0, start: 0, prePause: 0, sourceix: 0, length: 0 }; }
 
 export function createWordTranslationSession(services, selectedTable, initialState) {
-  if (!services || !services.dictionary || !services.rules || !services.letters || !services.stress || !services.accent) throw new TypeError('Expected composed English text services');
-  if (!selectedTable || selectedTable.index !== 80 || selectedTable.name !== 'en-us') throw new TypeError('Expected selected en-us phoneme table');
+  if (!services || !services.dictionary || !services.rules || !services.letters || !services.stress || !services.accent) throw new TypeError('Expected composed text services');
+  if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
+  var profile = initialState && initialState.profile ? initialState.profile : WORD_TRANSLATION_PROFILE;
+  var knownProfiles = { 'en-us': WORD_TRANSLATION_PROFILE, cmn: CMN_WORD_TRANSLATION_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile) ||
+      selectedTable.index !== profile.phonemeTable || selectedTable.name !== profile.voice) throw new TypeError('Unsupported word translation profile');
   var initial = initialState || {}, current = {};
   for (var i = 0; i < STATE_FIELDS.length; i++) {
-    var key = STATE_FIELDS[i]; current[key] = initial[key] === undefined ? key === 'dictCondition' ? 72 : 0 : initial[key];
+    var key = STATE_FIELDS[i]; current[key] = initial[key] === undefined ? key === 'dictCondition' ? profile.voice === 'cmn' ? 0 : 72 : 0 : initial[key];
     if (!Number.isInteger(current[key]) || current[key] < -0x80000000 || current[key] > 0xffffffff) throw new RangeError('Invalid word state ' + key);
   }
   var clauseEndSet = initial.clauseEnd !== undefined;
@@ -49,7 +55,8 @@ export function createWordTranslationSession(services, selectedTable, initialSta
   services.rules.setState({ wordVowelCount: current.wordVowelCount, wordStressedCount: current.wordStressedCount, prePause: current.prePause });
   var fault = null;
   var globalWordPhonemes = empty();
-  var numbers = services.numbers || createNumberTranslation(services.dictionary, { lookupSymbol: function (key, context) {
+  var numberProfile = profile.voice === 'cmn' ? CMN_NUMBER_PROFILE : undefined;
+  var numbers = services.numbers || createNumberTranslation(services.dictionary, { profile: numberProfile, lookupSymbol: function (key, context) {
     if (services.dictionary.setContext) services.dictionary.setContext({ dictCondition: context.dictCondition,
       expectVerb: context.expectVerb >>> 0, expectVerbS: context.expectVerbS >>> 0, expectNoun: context.expectNoun >>> 0, expectPast: context.expectPast >>> 0,
       prevDictFlags: context.prevDictFlags0, clauseTerminator: context.clauseTerminator });
@@ -60,7 +67,7 @@ export function createWordTranslationSession(services, selectedTable, initialSta
     current.repeatCount = dict.repeatCount; current.skipWords = dict.skipWords; current.prevLastStress = stress.prevLastStress;
     current.wordVowelCount = rules.wordVowelCount; current.wordStressedCount = rules.wordStressedCount; current.prePause = rules.prePause;
     var out = {}; for (var k = 0; k < STATE_FIELDS.length; k++) out[STATE_FIELDS[k]] = current[STATE_FIELDS[k]];
-    out.repeat = dict.repeat; out.clauseEndRelation = clauseEndRelation; out.phonemeTable = 80; out.native = true;
+    out.repeat = dict.repeat; out.clauseEndRelation = clauseEndRelation; out.phonemeTable = profile.phonemeTable; out.native = true;
     return out;
   }
   function setState(patch) {
@@ -126,7 +133,8 @@ export function createWordTranslationSession(services, selectedTable, initialSta
     return services.stress.setWordStress(phonemes, { dictionaryFlags: flags === null ? null : flags[0], tonic: tonic, control: control }).phonemes;
   }
   function changeStress(phonemes, level) {
-    var scanned = getVowelStress(phonemes, selectedTable, WORD_STRESS_PROFILE, { control: 0 });
+    var scanned = getVowelStress(phonemes, selectedTable,
+      profile.voice === 'cmn' ? CMN_WORD_STRESS_PROFILE : WORD_STRESS_PROFILE, { control: 0 });
     var levels = scanned.vowelStress;
     for (var i = 1; i < scanned.vowelCount; i++) {
       if (level >= 4) { if (levels[i] >= scanned.maxStress) { levels[i] = level; break; } }
@@ -185,8 +193,8 @@ export function createWordTranslationSession(services, selectedTable, initialSta
       alphabetName = looked.phonemes;
     }
     if (!name.length) {
-      var language = alphabet && alphabet.language && !(alphabet.flags & ALPHABET_FLAGS.NOT_LETTERS) ? alphabet.language : 25966;
-      if (language !== 25966) unsupported('letter-language');
+      var language = alphabet && alphabet.language && !(alphabet.flags & ALPHABET_FLAGS.NOT_LETTERS) ? alphabet.language : profile.altAlphabetLanguage;
+      if (language !== profile.altAlphabetLanguage) unsupported('letter-language');
     }
     if (!name.length) {
       var alFlags = alphabet ? alphabet.flags : 0;
@@ -231,21 +239,26 @@ export function createWordTranslationSession(services, selectedTable, initialSta
     var first = readForward(buffer, start).codepoint, alphabet = alphabetFromChar(first);
     if (alphabet && alphabet.offset !== 0) return false;
     if (buffer[start] === 32 || buffer[start] === 0 || buffer[start] === 39) return false;
+    if (profile.unpronouncable === 1) return false;
     var offset = start, count = 0, vowelPosition = 9;
+    var firstCodePoint = 0;
     while (true) {
       var decoded = readForward(buffer, offset), cp = decoded.codepoint; offset += decoded.bytes;
       if (!cp || cp === 32 || (cp === 39 && (count > 1 || position > 0))) break;
       count++;
+      if (count === 1) firstCodePoint = cp;
       var vowel = cp >= 0xc0 && cp < RULE_PROFILE.removeAccentLimit ? LETTER_BITS[REMOVE_ACCENT[cp - 0xc0]] & 128 : cp < 256 ? LETTER_BITS[cp] & 128 : 0;
       if (vowel) { vowelPosition = count; break; }
       if (cp !== 39 && !iswAlpha(cp)) return false;
     }
-    if (vowelPosition > 2) {
+    if (vowelPosition > 2 && profile.unpronouncable === 2) {
       var previous = buffer[start - 1]; buffer[start - 1] = 32;
       var result = rule(buffer, start, null, F.FLAG_UNPRON_TEST, false);
       buffer[start - 1] = previous;
       return result.endType === 0 || (result.endType & F.SUFX_UNPRON) !== 0;
     }
+    if (firstCodePoint === profile.unpronouncable) vowelPosition--;
+    if (vowelPosition > profile.maxInitialConsonants + 1) return true;
     return false;
   }
   function dottedAbbreviation(buffer, start) {
@@ -313,7 +326,9 @@ export function createWordTranslationSession(services, selectedTable, initialSta
     function done(value) { return { flags: value >>> 0, phonemes: output, wordOut: wordOut, anyStressedWords: anyStressed }; }
     function dict(at, target, endingFlags) { return lookup(buffer.subarray(at, at + cLength(buffer, at)), target, endingFlags, words, remaining, clauseEnd === null ? null : clauseEnd - at); }
     function remove(at, type, copy) {
-      var removed = removeEnding(buffer.subarray(at, at + cLength(buffer, at)), type, WORD_ENDING_PROFILE, { expectVerb: current.expectVerb, copyWord: copy });
+      var removed = removeEnding(buffer.subarray(at, at + cLength(buffer, at)), type,
+        profile.voice === 'cmn' ? CMN_WORD_ENDING_PROFILE : WORD_ENDING_PROFILE,
+        { expectVerb: current.expectVerb, copyWord: copy });
       buffer.set(removed.word, at); current.expectVerb = removed.expectVerb; return removed;
     }
     function translateNumber(roman) {

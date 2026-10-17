@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2014 Jonathan Duddington.
 // See licenses/espeak-ng/COPYING.txt.
 import { createPhonemeData, createPhonemeInterpreter, createWordPhonemeData } from './phoneme-interpreter.js';
+import { createPhonemeListBuffer } from './phoneme-interpreter.js';
 
 export var GENERATE_EVENT_CONSTANTS = Object.freeze({
   phPAUSE: 0, phVOWEL: 2, phLIQUID: 3, phSTOP: 4, phVSTOP: 5,
@@ -62,11 +63,35 @@ export function createGenerateEventPlanner(phonindexBytes, selectedTable, option
       emit({ kind: 'pause', length, control });
       endPitch(1);
     }
-    function doAmplitude(amp, envelope) { emit({ kind: 'amplitude', amp, envelope }); }
-    function doPitch(envelope, pitch1, pitch2) {
-      emit({ kind: 'pitch', envelope: canonicalEnvelope(envelope), pitch1, pitch2 });
+    function doAmplitude(amp, envelope, envelopeBytes) {
+      emit({ kind: 'amplitude', amp, envelope, envelopeBytes });
+    }
+    function doPitch(envelope, pitch1, pitch2, envelopeBytes) {
+      emit({ kind: 'pitch', envelope: envelopeBytes ? null : canonicalEnvelope(envelope), pitch1, pitch2, envelopeBytes });
       endPitch(0);
       lastPitchCmd = 1;
+    }
+    function envelopeBytesAt(address) {
+      if (address === 0) return null;
+      if (!(opts.phondataBytes instanceof Uint8Array) || address < 0 || address + 128 > opts.phondataBytes.length) {
+        unsupported('tone-phoneme-envelope');
+      }
+      return opts.phondataBytes.slice(address, address + 128);
+    }
+    function interpretTone(code) {
+      const isolated = createPhonemeListBuffer(4);
+      for (let index = 0; index < 4; index++) isolated.phcode[index] = 9;
+      isolated.phcode[1] = code;
+      isolated.phonemeId[1] = code + 1;
+      isolated.sourceix[2] = 1;
+      return vm.interpret(isolated, 1, { start: 0, control: 0, translator: false, wordData: null });
+    }
+    function toneEnvelopes(index) {
+      if (list.tonePh[index] === 0) return { pitchEnvelope: list.env[index], pitchEnvelopeBytes: null, ampEnvelope: -1, ampEnvelopeBytes: null };
+      const toneData = interpretTone(list.tonePh[index]);
+      const pitchEnvelopeBytes = envelopeBytesAt(toneData.pitchEnv);
+      const ampEnvelopeBytes = toneData.ampEnv > 0 ? envelopeBytesAt(toneData.ampEnv) : null;
+      return { pitchEnvelope: null, pitchEnvelopeBytes, ampEnvelope: null, ampEnvelopeBytes };
     }
     function doSample3(phdata, lengthMod, amp) {
       emit({ kind: 'sample3', soundAddr: phdata.soundAddr[C.pd_WAV], soundParam: phdata.soundParam[C.pd_WAV],
@@ -286,28 +311,28 @@ export function createGenerateEventPlanner(phonindexBytes, selectedTable, option
           fmtp.fmtAddr = phdata.soundAddr[C.pd_FMT];
         }
         fmtp.fmtAmp = phdata.soundParam[C.pd_FMT];
-        if (list.tonePh[ix] !== 0) unsupported('tone-phoneme-envelope');
+        const tone = toneEnvelopes(ix);
         emit({ kind: 'startSyllable' });
         let modulation = 2;
         if (stress <= 1) modulation = 1;
         else if (stress >= 7) modulation = 3;
         if (prevType === C.phVSTOP || prevType === C.phVFRICATIVE) {
-          doAmplitude(list.amp[ix], -1);
-          doPitch(list.env[ix], list.pitch1[ix], list.pitch2[ix]);
+          doAmplitude(list.amp[ix], tone.ampEnvelope, tone.ampEnvelopeBytes);
+          doPitch(tone.pitchEnvelope, list.pitch1[ix], list.pitch2[ix], tone.pitchEnvelopeBytes);
           doSpect2(ph, 1, fmtp, ix, modulation);
         } else if (prevType === C.phLIQUID || prevType === C.phNASAL) {
-          doAmplitude(list.amp[ix], -1);
+          doAmplitude(list.amp[ix], tone.ampEnvelope, tone.ampEnvelopeBytes);
           doSpect2(ph, 1, fmtp, ix, modulation);
-          doPitch(list.env[ix], list.pitch1[ix], list.pitch2[ix]);
+          doPitch(tone.pitchEnvelope, list.pitch1[ix], list.pitch2[ix], tone.pitchEnvelopeBytes);
         } else if (vowelstartPrev) {
           doPitch(2, list.pitch2[ix] - 15, list.pitch2[ix]);
-          doAmplitude(list.amp[ix] - 1, -1);
+          doAmplitude(list.amp[ix] - 1, tone.ampEnvelope, tone.ampEnvelopeBytes);
           doSpect2(ph, 1, fmtp, ix, modulation);
-          doPitch(list.env[ix], list.pitch1[ix], list.pitch2[ix]);
+          doPitch(tone.pitchEnvelope, list.pitch1[ix], list.pitch2[ix], tone.pitchEnvelopeBytes);
         } else {
           if (!(list.synthflags[ix] & C.SFLAG_SEQCONTINUE)) {
-            doAmplitude(list.amp[ix], -1);
-            doPitch(list.env[ix], list.pitch1[ix], list.pitch2[ix]);
+            doAmplitude(list.amp[ix], tone.ampEnvelope, tone.ampEnvelopeBytes);
+            doPitch(tone.pitchEnvelope, list.pitch1[ix], list.pitch2[ix], tone.pitchEnvelopeBytes);
           }
           doSpect2(ph, 1, fmtp, ix, modulation);
         }

@@ -6,6 +6,7 @@ import {
   createPhonemeListBuffer, createWordPhonemeData
 } from './phoneme-interpreter.js';
 import { PHONEME_PREPARE_PROFILE } from '../../data/phoneme-prepare/profile.js';
+import { CMN_PHONEME_PREPARE_PROFILE } from '../../data/cmn/synthesis-profile.js';
 
 export var MAKE_PHONEME_LIST_PROFILE = Object.freeze({ ...PHONEME_PREPARE_PROFILE });
 const C = Object.freeze({
@@ -65,11 +66,13 @@ function reinterpretPhoneme(vm, list, index, ph, oldPh, wordData, phdata, reduce
 
 export function createPhonemeListMaker(phonindexBytes, selectedTable, profile) {
   if (!(phonindexBytes instanceof Uint8Array) || (phonindexBytes.length & 1) || phonindexBytes.length < 2) throw new TypeError('Expected complete phonindex bytes');
-  if (!selectedTable || selectedTable.index !== 80 || selectedTable.name !== 'en-us') throw new TypeError('Expected original en-us phoneme table');
+  if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   const supplied = profile || MAKE_PHONEME_LIST_PROFILE;
-  const keys = Object.keys(MAKE_PHONEME_LIST_PROFILE);
-  for (const key of keys) if (supplied[key] !== MAKE_PHONEME_LIST_PROFILE[key]) throw new Error('Unsupported MakePhonemeList profile: ' + key);
-  if (supplied.regressiveVoicing !== 0 || supplied.vowelPause !== 0 || supplied.wordGap !== 0 || supplied.optionWordgap !== 0) {
+  const knownProfiles = { 'en-us': MAKE_PHONEME_LIST_PROFILE, cmn: CMN_PHONEME_PREPARE_PROFILE };
+  const expectedProfile = knownProfiles[supplied.voice];
+  if (!expectedProfile || JSON.stringify(supplied) !== JSON.stringify(expectedProfile) ||
+      selectedTable.index !== supplied.phonemeTable || selectedTable.name !== supplied.voice) throw new Error('Unsupported MakePhonemeList profile');
+  if (supplied.regressiveVoicing !== 0 || supplied.vowelPause !== 0 || supplied.optionWordgap !== 0) {
     unsupported('nonzero-prosody-option');
   }
   const vm = createPhonemeInterpreter(phonindexBytes, selectedTable);

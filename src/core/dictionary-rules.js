@@ -6,6 +6,7 @@ import { readForward, readBackward } from './utf8-scan.js';
 import { isAlpha, iswAlpha, isDigit, bracketIndex } from './unicode.js';
 import { alphabetFromChar } from './text-character.js';
 import { RULE_PROFILE, LETTER_BITS, LETTER_GROUPS, REMOVE_ACCENT } from '../../data/rules/profile.js';
+import { CMN_RULE_PROFILE } from '../../data/cmn/synthesis-profile.js';
 export { RULE_PROFILE };
 
 function cLength(bytes, start) { var i = start; while (i < bytes.length && bytes[i]) i++; return i - start; }
@@ -14,21 +15,24 @@ function copyString(bytes) {
   if (!(bytes instanceof Uint8Array)) throw new TypeError('Expected rule input Uint8Array');
   return new Uint8Array(bytes.subarray(0, cLength(bytes, 0)));
 }
-function isLetter(cp, group) {
+function isLetter(cp, group, ruleData, removeAccentLimit) {
   if (group < 0 || group > 7) return 0;
-  var letters = LETTER_GROUPS[group];
+  var letters = ruleData.letterGroups[group];
   if (letters !== null) return letters.indexOf(cp) >= 0 ? 1 : 0;
-  if (cp >= 0xc0 && cp < RULE_PROFILE.removeAccentLimit) return LETTER_BITS[REMOVE_ACCENT[cp - 0xc0]] & (1 << group);
-  return cp >= 0 && cp < 256 ? LETTER_BITS[cp] & (1 << group) : 0;
+  if (cp >= 0xc0 && cp < removeAccentLimit) return ruleData.letterBits[ruleData.removeAccent[cp - 0xc0]] & (1 << group);
+  return cp >= 0 && cp < 256 ? ruleData.letterBits[cp] & (1 << group) : 0;
 }
 
 export function createDictionaryRulesSession(dictionary, selectedTable, profile, options) {
   if (!dictionary || !(dictionary.bytes instanceof Uint8Array) || !(dictionary.groups1 instanceof Uint32Array)) throw new TypeError('Expected loaded original dictionary');
-  if (!selectedTable || selectedTable.index !== 80 || selectedTable.name !== 'en-us') throw new TypeError('Expected original en-us phoneme table');
+  if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   if (!profile) throw new TypeError('Expected explicit initialized rule profile');
-  var profileKeys = Object.keys(RULE_PROFILE);
-  for (var pk = 0; pk < profileKeys.length; pk++) if (profile[profileKeys[pk]] !== RULE_PROFILE[profileKeys[pk]]) throw new Error('Unsupported rule profile: ' + profileKeys[pk]);
+  var knownProfiles = { 'en-us': RULE_PROFILE, cmn: CMN_RULE_PROFILE };
+  var expectedProfile = knownProfiles[profile.voice];
+  if (!expectedProfile || JSON.stringify(profile) !== JSON.stringify(expectedProfile) ||
+      selectedTable.index !== profile.phonemeTable || selectedTable.name !== profile.voice) throw new Error('Unsupported rule profile');
   var dependencies = options || {}, dictSession = dependencies.dictionarySession;
+  var ruleData = dependencies.ruleData || { letterBits: LETTER_BITS, letterGroups: LETTER_GROUPS, removeAccent: REMOVE_ACCENT };
   var current = { wordVowelCount: 0, wordStressedCount: 0, prePause: 0, repeatCount: 0, skipWords: 0 };
   var db = dictionary.bytes;
   function unsupported(reason) {
@@ -144,7 +148,7 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
           switch (rb) {
             case F.RULE_LETTERGP:
               var group = (ruleByte(rule++) - 65) & 255;
-              if (isLetter(letterW, group)) { points = (group === 2 ? 19 : 20) - distanceRight; post += extra; } else failed = 1;
+              if (isLetter(letterW, group, ruleData, profile.removeAccentLimit)) { points = (group === 2 ? 19 : 20) - distanceRight; post += extra; } else failed = 1;
               break;
             case F.RULE_LETTERGP2:
               group = (ruleByte(rule++) - 65) & 255;
@@ -152,11 +156,13 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
               if (width >= 0) { points = 20 - distanceRight; post += width - 1; } else failed = 1;
               break;
             case F.RULE_NOTVOWEL:
-              if (isLetter(letterW, 0) || (letterW === 32 && (setting.wordFlags & F.FLAG_SUFFIX_VOWEL))) failed = 1;
+              if (isLetter(letterW, 0, ruleData, profile.removeAccentLimit) || (letterW === 32 && (setting.wordFlags & F.FLAG_SUFFIX_VOWEL))) failed = 1;
               else { points = 20 - distanceRight; post += extra; }
               break;
             case F.RULE_DIGIT:
-              if (isDigit(letterW)) { points = 20 - distanceRight; post += extra; } else failed = 1;
+              if (isDigit(letterW)) { points = 20 - distanceRight; post += extra; }
+              else if (profile.toneNumbers === 1) { points = 20 - distanceRight; post--; }
+              else failed = 1;
               break;
             case F.RULE_NONALPHA:
               if (!iswAlpha(letterW)) { points = 21 - distanceRight; post += extra; } else failed = 1;
@@ -179,15 +185,15 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
               var p = post + extra, syllables = 1, vowelCount = 0, vowel = 0;
               while (ruleByte(rule) === F.RULE_SYLLABLE) { rule++; syllables++; }
               while (letterW !== 32 && letterW !== 0) {
-                if (vowel === 0 && isLetter(letterW, 7)) vowelCount++;
-                vowel = isLetter(letterW, 7); decoded = readForward(word, p); p += decoded.bytes; letterW = decoded.codepoint;
+                if (vowel === 0 && isLetter(letterW, 7, ruleData, profile.removeAccentLimit)) vowelCount++;
+                vowel = isLetter(letterW, 7, ruleData, profile.removeAccentLimit); decoded = readForward(word, p); p += decoded.bytes; letterW = decoded.codepoint;
               }
               if (syllables <= vowelCount) points = 18 + syllables - distanceRight; else failed = 1;
               break;
             case F.RULE_NOVOWELS:
               p = post + extra;
               while (letterW !== 32 && letterW !== 0) {
-                if (isLetter(letterW, 7)) { failed = 1; break; }
+                if (isLetter(letterW, 7, ruleData, profile.removeAccentLimit)) { failed = 1; break; }
                 decoded = readForward(word, p); p += decoded.bytes; letterW = decoded.codepoint;
               }
               if (!failed) points = 19 - distanceRight;
@@ -225,14 +231,14 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
           switch (rb) {
             case F.RULE_LETTERGP:
               group = (ruleByte(rule++) - 65) & 255;
-              if (isLetter(letterW, group)) { points = (group === 2 ? 19 : 20) - distanceLeft; pre -= extra; } else failed = 1;
+              if (isLetter(letterW, group, ruleData, profile.removeAccentLimit)) { points = (group === 2 ? 19 : 20) - distanceLeft; pre -= extra; } else failed = 1;
               break;
             case F.RULE_LETTERGP2:
               group = (ruleByte(rule++) - 65) & 255; width = letterGroup(word, pre, group, true);
               if (width >= 0) { points = 20 - distanceRight; pre -= width - 1; } else failed = 1;
               break;
             case F.RULE_NOTVOWEL:
-              if (!isLetter(letterW, 0)) { points = 20 - distanceLeft; pre -= extra; } else failed = 1;
+              if (!isLetter(letterW, 0, ruleData, profile.removeAccentLimit)) { points = 20 - distanceLeft; pre -= extra; } else failed = 1;
               break;
             case F.RULE_DOUBLE:
               if (letterW === lastLetterW) { points = 21 - distanceLeft; pre -= extra; } else failed = 1;
@@ -255,7 +261,7 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
             case F.RULE_NOVOWELS:
               p = pre - extra;
               while (letterW !== 32) {
-                if (isLetter(letterW, 7)) { failed = 1; break; }
+                if (isLetter(letterW, 7, ruleData, profile.removeAccentLimit)) { failed = 1; break; }
                 decoded = readBackward(word, p - 1); p -= decoded.bytes; letterW = decoded.codepoint;
               }
               if (!failed) points = 3;
@@ -359,7 +365,7 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
       var c = at(source, position), decoded = readForward(source, position), wc = decoded.codepoint, wcBytes = decoded.bytes;
       if (isAlpha(wc)) anyAlpha++;
       var groups = dictionary.groups2Count[c];
-      if (isDigit(wc)) {
+      if (isDigit(wc) && !(profile.toneNumbers === 1 && anyAlpha > 0)) {
         if (typeof dependencies.lookup !== 'function') unsupported('digit-lookup');
         var key = new Uint8Array(wcBytes + 1); key[0] = 95; key.set(source.subarray(position, position + wcBytes), 1);
         var digitPhonemes = copyString(dependencies.lookup(key)); syncDictionary();
@@ -396,9 +402,9 @@ export function createDictionaryRulesSession(dictionary, selectedTable, profile,
             var letterDecoded = readForward(source, position - 1), letter = letterDecoded.codepoint, n = letterDecoded.bytes - 1;
             if (letter === 0xe028 && current.prePause < profile.bracketPauseAnnounced) current.prePause = profile.bracketPauseAnnounced;
             if (bracketIndex(letter) && current.prePause < profile.bracketPause) current.prePause = profile.bracketPause;
-            if (letter >= 0xc0 && letter < profile.removeAccentLimit && REMOVE_ACCENT[letter - 0xc0]) {
+            if (letter >= 0xc0 && letter < profile.removeAccentLimit && ruleData.removeAccent[letter - 0xc0]) {
               if (at(source, position - 2) !== 32 || at(source, position + n) !== 32) {
-                source[position - 1] = REMOVE_ACCENT[letter - 0xc0];
+                source[position - 1] = ruleData.removeAccent[letter - 0xc0];
                 while ((source[position] = at(source, position + n)) !== 32) position++;
                 while (n-- > 0) source[position++] = 32;
                 phonemes = new Uint8Array(0); position = start; current.wordVowelCount = 0; current.wordStressedCount = 0;

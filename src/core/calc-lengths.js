@@ -2,6 +2,7 @@
 // GPL-3.0-or-later. Copyright (C) 2005-2014 Jonathan Duddington.
 // See licenses/espeak-ng/COPYING.txt.
 import { PROSODY_PROFILE } from '../../data/prosody/profile.js';
+import { CMN_PROSODY_PROFILE } from '../../data/cmn/synthesis-profile.js';
 
 export var LENGTH_CONSTANTS = Object.freeze({
   phPAUSE: 0, phVOWEL: 2, phLIQUID: 3, phSTOP: 4, phVSTOP: 5,
@@ -44,8 +45,9 @@ function divide(value, divisor) { return Math.trunc(value / divisor); }
 export function createLengthCalculator(selectedTable, profile) {
   if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   const supplied = profile || PROSODY_PROFILE;
-  const keys = Object.keys(PROSODY_PROFILE);
-  for (const key of keys) if (supplied[key] !== PROSODY_PROFILE[key]) throw new Error('Unsupported CalcLengths profile: ' + key);
+  const knownProfiles = { 'en-us': PROSODY_PROFILE, cmn: CMN_PROSODY_PROFILE };
+  const expectedProfile = knownProfiles[supplied.voice];
+  if (!expectedProfile || JSON.stringify(supplied) !== JSON.stringify(expectedProfile)) throw new Error('Unsupported CalcLengths profile');
   const stressAmps = supplied.stressAmps, stressLengths = supplied.stressLengths, lenSpeeds = supplied.lenSpeeds;
   const lengthMods = supplied.length_mods, lengthMods0 = supplied.length_mods0;
 

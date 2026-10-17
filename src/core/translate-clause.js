@@ -31,12 +31,22 @@ export function createEnglishClauseTranslation(input, dictionary, table, options
   if (!(input instanceof Uint8Array)) throw new TypeError('Expected UTF-8 input bytes');
   var opts = options || {}, trace = opts.trace;
   if (trace !== undefined && typeof trace !== 'function') throw new TypeError('Expected trace callback');
-  for (var key of Object.keys(opts)) if (key !== 'trace') throw new TypeError('Unsupported clause translation option: ' + key);
-  var services = createEnglishWordServices(dictionary, table), embedded = createEmbeddedSession();
-  var reader = createClauseReader(input, { dictionary: services.characterNames });
-  var tokenizer = createClauseTokenizer({ embedded: embedded });
-  var list = createPhonemeListSession(table, PHONEME_LIST_PROFILE);
-  var words = createWordToPhonemesSession(services, table, list, PHONEMIZER_PROFILE);
+  for (var key of Object.keys(opts)) if (key !== 'trace' && key !== 'profile') throw new TypeError('Unsupported clause translation option: ' + key);
+  var profile = opts.profile;
+  if (profile !== undefined && (profile === null || typeof profile !== 'object' || profile.voice !== table.name)) throw new TypeError('Clause profile differs from selected table');
+  var services = createEnglishWordServices(dictionary, table, {
+    ruleProfile: profile && profile.ruleProfile,
+    ruleData: profile && profile.ruleData,
+    stressProfile: profile && profile.wordStressProfile,
+    wordTranslationProfile: profile && profile.wordTranslationProfile,
+    initialState: profile && profile.wordTranslationProfile ? { dictCondition: profile.wordTranslationProfile.dictCondition } : undefined
+  });
+  var embedded = createEmbeddedSession();
+  var reader = createClauseReader(input, { dictionary: services.characterNames, voice: table.name });
+  var tokenizer = createClauseTokenizer({ embedded: embedded, voice: table.name,
+    profile: profile ? { ...profile.textCharacterProfile, replacementBytes: profile.replacementBytes } : undefined });
+  var list = createPhonemeListSession(table, profile ? profile.phonemeListProfile : PHONEME_LIST_PROFILE);
+  var words = createWordToPhonemesSession(services, table, list, profile ? profile.phonemizerProfile : PHONEMIZER_PROFILE);
   var countWords = 0, countSentences = 0, maxClausePause = 0, newSentence = true, fault = null, emptyInput = input.length === 0;
   function state() { return { countWords: countWords, countSentences: countSentences, maxClausePause: maxClausePause,
     newSentence: newSentence, reader: reader.state(), word: services.wordTranslation.state(), word2: words.state() }; }

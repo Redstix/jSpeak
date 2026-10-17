@@ -35,7 +35,7 @@ export function createEnglishSynthesizer({ dictionaryBytes, dictionaryManifest, 
   }
   const table = selectPhonemeTable(phontabBytes, 80);
   const dictionary = loadDictionary(dictionaryBytes, dictionaryManifest);
-  const eventPlanner = createGenerateEventPlanner(phonindexBytes, table);
+  const eventPlanner = createGenerateEventPlanner(phonindexBytes, table, { phondataBytes });
   const commandPlanner = createWaveCommandPlanner(phondataBytes, table, { voice: DEFAULT_EN_US_VOICE });
   const pitchCalculator = createEnglishPitchCalculator(table);
   const lengthCalculator = createLengthCalculator(table);
