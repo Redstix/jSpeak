@@ -2,6 +2,12 @@
 
 执行基线：[最终实施计划](DEVELOPMENT_PLAN.md)。恢复入口：[HANDOVER](HANDOVER.md)。0.4.1增量写入、播放及听感通过。M01原语已验证；M02断句/分词/内嵌命令/标点读名在当前990输入中989 exact、1原C越界，0服务依赖缺口。M03固定en字典已验收；M04词级正式差分1372组中1370 exact、2原C UB；M05音素列表与M06整句到pre-MakePhonemeList已通过68组原CLI对照；M07完整MakePhonemeList、CalcPitches与CalcLengths已通过99子句两阶段全exact；M08音素VM 8200/8200 exact；M10固定en-us波形后端已在完整Generate命令计划上达到整句PCM exact；M11有界命令→PCM运行时已通过慢消费、长输入、取消重启与100次会话验收。完整文本→PCM、Vela文件播放与真机生命周期待M12。M15的cmn数据/profile与CalcPitches_Tone切片已落地：数据差分29 exact/1 unsupported，tone差分13/13 exact；cmn完整JS前端和真机中文出声未完成。
 
+## 2026-10-17 真机结果与下一版决定
+
+- **0.5.3-A 真机通过**：用户确认「a档rpk真机测试通过，有清晰hello，world声音」。这只证明 A 档固定英文的启动/合成/播放/听感可用；未提供页头逐行数据，设备 CPU/heap/RTF 仍不可测/未知，M12 的 C/JS PCM exact 仍未闭合。
+- **B/C 档取消**：用户决定下一版不再提供预合成播放档，只保留 A 档完整 JS 合成。B/C 未做真机验收，0.5.3 B/C 构建仅作历史记录。
+- 下一版范围：普通话（cmn）合成、合成速度/性能/压力测试；由 Codex 执行，完成即 commit + push。
+
 ## 2026-10-15 本轮核查（实测，非文档推断）
 
 - 权威分支 `perf/quickjs-vela-optimization`，运行时优化源码提交 `7ad0705`；起始工作树干净，已复核 `6140c24` 及此前 0.5.2 记录。
