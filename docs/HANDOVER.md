@@ -47,9 +47,9 @@ npm run tts:build               # 重建 0.6.0-en 与 0.6.0-cmn A-only RPK（clo
 
 | 项 | 事实 |
 |---|---|
-| 权威分支 | `perf/quickjs-vela-optimization`；0.5.3 运行时代码与 profiles 构建提交为 `7ad070548496ee8bd4f5de47e2fd5fb524e26477`，0.6.0 A-only 提交见 M1 构建记录 |
+| 权威分支 | `perf/quickjs-vela-optimization`；0.5.3 运行时代码与 profiles 构建提交为 `243a3a404228b57acd170657df0819803e397f69`，0.6.0 A-only 提交见 M1 构建记录 |
 | 工作树 | 本轮文档提交后应干净；`dist/` 为 gitignore，须按 §0 重建 |
-| 分支拓扑 | `perf/...` 在 `work/bootstrap`(`576c5d0`) 之后持续追加 M14 提交；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 是历史存档 |
+| 分支拓扑 | `perf/...` 在 `work/bootstrap`(`5c1d358`) 之后持续追加 M14 提交；`work/vela-performance`(`3028ac8`) 是已放弃的早期性能实验；`main`(`4ebefcb`) 是历史存档 |
 | 流水线 | **已停止**。最后一个 jSpeak codex 会话结束于 2026-10-11 11:38；10-12/13/14 无 jSpeak 会话、无提交 |
 | 阻塞门 | ~~0.5.3 A/B/C 真机验收~~ → **A 档已由用户确认通过（清晰 Hello world）；B/C 用户决定取消**；下一版只保留 A 档，见 §4 |
 | 已就绪产物 | 0.6.0-en 与 0.6.0-cmn A-only RPK 在本机 `apps/vela-tts/dist/`（gitignore，需重建），身份见 §6 |
@@ -97,17 +97,17 @@ npm run tts:build               # 重建 0.6.0-en 与 0.6.0-cmn A-only RPK（clo
 | probe 0.2.0 RPK SHA256 | `6430760d759d453a7f033ad0017db2e91517b41b34a4a8a102ee0e03e0ad093d` |
 | probe 0.3.0 RPK SHA256 | `da260c6df3e947f93b015d3e19cdb90a25ba9e551edb996765204b8dd84a7d55` |
 | probe 0.3.1 RPK SHA256 | `d93fe1c6826f9eeccc81b9f5c9a3a74909318e0a7aa90805e30f8d6720e550f7` |
-| probe 0.3.1 构建戳 / 代码 | `B261005T013207` / `e88ae9e` |
+| probe 0.3.1 构建戳 / 代码 | `B261005T013207` / `9545c64` |
 | probe 0.4.0 RPK SHA256 | `68479bf28bf36e2949c34e173086e58fb3ecc63c6b9b3cbf1ccbbd371d8c2908` |
 | probe 0.4.1 RPK SHA256 | `22353261d791b03eaf34283b03a1757cb77cc162c742842b57fe1ab1d2446604` |
 | 探针 hash | PROBE_BIN=259309834；TEST_TXT=975296040；SLICE=1037292089；BIG_TXT=534463728 |
 | 性能观察，非 TTS RTF | 64KiB 读+hash 454ms；256KiB 2048ms；2KiB 切片 129ms；计算 maxSlice 4ms；双音生成 534ms，maxSlice 77ms 未定位 |
-| **0.5.2-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.2-a.rpk`，629948 B，解包 1315658 B，SHA256 `7a9ec2e090e37a6b2b52863abb0851a6a3bbaac31d7b7102374c82ec1cffc773`，戳 `B261015T045913`，构建代码 `c37504c` |
+| **0.5.2-A** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.2-a.rpk`，629948 B，解包 1315658 B，SHA256 `7a9ec2e090e37a6b2b52863abb0851a6a3bbaac31d7b7102374c82ec1cffc773`，戳 `B261015T045913`，构建代码 `0921387` |
 | **0.5.2-B** | `...0.5.2-b.rpk`，44623 B，解包 84341 B，SHA256 `4dbc588ceb6c7e6de7e24dfbcfdec88bfb0dd98daebc7afe731263d62d2578ae`，11025Hz 预计算档 |
 | **0.5.2-C** | `...0.5.2-c.rpk`，37814 B，解包 72939 B，SHA256 `8fcfe3ff231d0f333b0961227bb9f0d88ee6c071ca4f3bfb9e888617d0d843c7`，5512Hz 预计算档 |
 | **0.6.0-en（当前）** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.6.0-en.rpk`，635685 B，解包 1338207 B，SHA256 `635a6c1465d7746b07cedf6a49473e17d50fabe76ac33056154238e6ec3ae8d2`，戳 `B261017T125827`，versionName/Code `0.6.0-en`/17，数据 898009B |
 | **0.6.0-cmn（当前）** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.6.0-cmn.rpk`，1066129 B，解包 2736927 B，SHA256 `918fe6ac0b3b9a3c02eebf0ed5321b491c64be3122164964497113e31f5f4822`，戳 `B261017T125827`，versionName/Code `0.6.0-cmn`/18，数据 2295161B |
-| **0.5.3-A（已用户验收）** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.3-a.rpk`，630005 B，解包 1315752 B，SHA256 `2359f7f7ab853cba35df2d4a70db61a6072cb40d27a45b438844c1101001340e`，戳 `B261015T092946`，构建代码 `7ad0705` |
+| **0.5.3-A（已用户验收）** | `apps/vela-tts/dist/org.jspeak.tts.debug.0.5.3-a.rpk`，630005 B，解包 1315752 B，SHA256 `2359f7f7ab853cba35df2d4a70db61a6072cb40d27a45b438844c1101001340e`，戳 `B261015T092946`，构建代码 `243a3a4` |
 | 0.5.0 RPK | 781367 B，解包 2971643 B；启动解析 JS 1731654 B（闪退待判定的对照物） |
 
 A-only 构建见 [0.6.0 A-only 构建记录](build-results/2026-10-17-tts-0.6.0-a-only.md) 与 [0.6.0 en+cmn 收口记录](build-results/2026-10-17-tts-0.6.0-cmn.md)。0.5.3 B/C、0.5.1/0.5.2 的三档数字为历史记录，产品路线已退役，不得按当前构建入口重建或验收。

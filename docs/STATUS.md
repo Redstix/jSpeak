@@ -24,10 +24,10 @@
 
 ## 2026-10-15 本轮核查（实测，非文档推断）
 
-- 权威分支 `perf/quickjs-vela-optimization`，运行时优化源码提交 `7ad0705`；起始工作树干净，已复核 `6140c24` 及此前 0.5.2 记录。
+- 权威分支 `perf/quickjs-vela-optimization`，运行时优化源码提交 `243a3a4`；起始工作树干净，已复核 `0b365ab` 及此前 0.5.2 记录。
 - M14续作已完成 A 档合成内环低损优化：直接执行 int32 包装等价算术、缓存当前谱表/固定常量并内联 PCM16 映射；未改 DSP 数值、随机状态、命令顺序或输出缓冲。
-- Node 成对代理（5轮×每轮25次，基线`6140c24` vs 候选`7ad0705`）：合成 median 43.188ms→31.212ms，RTF median 0.041751→0.030174，均 -27.73%；A 档 WAV SHA256 保持 `fc94cec17a566cdc2fe06be15b0df4b227406c05646b0343f0b5f6e1008ea6d1`。
-- 0.5.3 A/B/C 已从运行时提交重建：A 630005B / SHA256 `2359f7f7…1340e` / 启动解析 360724B；B/C 44626B / 37811B。`profiles.json` 构建 commit 为 `7ad070548496ee8bd4f5de47e2fd5fb524e26477`。
+- Node 成对代理（5轮×每轮25次，基线`0b365ab` vs 候选`243a3a4`）：合成 median 43.188ms→31.212ms，RTF median 0.041751→0.030174，均 -27.73%；A 档 WAV SHA256 保持 `fc94cec17a566cdc2fe06be15b0df4b227406c05646b0343f0b5f6e1008ea6d1`。
+- 0.5.3 A/B/C 已从运行时提交重建：A 630005B / SHA256 `2359f7f7…1340e` / 启动解析 360724B；B/C 44626B / 37811B。`profiles.json` 构建 commit 为 `243a3a404228b57acd170657df0819803e397f69`。
 - 代价如实记录：0.5.3-A 启动解析较 0.5.2-A +94B，RPK +57B，首次点击整读 898009B 未变。设备 CPU/heap 不可测/未知，不能把 Node 代理写成设备收益比例。
 - `npm test` 279/279、0 fail、0 skip；`data:verify` 通过；CalcPitches/MakePhonemeList/Prosody/GenerateEvents/cmn tone/Wavegen pause/wave/full 全部 exact。0.5.3 三档待用户真机验收。
 
@@ -35,7 +35,7 @@
 
 本轮交接给另一台机器上的另一个 agent（clone 后继续），以下是交接时点实际核对到的事实：
 
-- 权威分支 `perf/quickjs-vela-optimization` @ `9fbbe75`，工作树干净、与 origin 同步；该分支 = `work/bootstrap`(`576c5d0`) + 2 个 M14 提交；`work/vela-performance`(`9e54b74`) 是已放弃的早期性能实验；`main`(`016fd82`) 为历史存档。
+- 权威分支 `perf/quickjs-vela-optimization` @ `866b91e`，工作树干净、与 origin 同步；该分支 = `work/bootstrap`(`5c1d358`) + 2 个 M14 提交；`work/vela-performance`(`3028ac8`) 是已放弃的早期性能实验；`main`(`4ebefcb`) 为历史存档。
 - **无人值守流水线已停止**：最后一个 jSpeak codex 会话结束于 2026-10-11 11:38；10-12/13/14 无 jSpeak 会话、无提交（按 `~/.codex/sessions/2026/10/<day>` 逐日计数核实）。
 - 静默原因：本机「jSpeak 流水线看门狗」cron 任务已不在 cron 表中，而 Codex 阶段 report 写在 `~/.hermes/cache/scratch/`——该目录 idle 24h 即被 prune，report 一并消失；既无看门狗又留不住 report，停摆三天无人上报。
 - 模型通道（本机）已恢复：`z-ai/glm-5.3` 新旧两把 key 均 HTTP 200，LiteLLM 响应头 `x-litellm-model-name: nvidia_nim/z-ai/glm-5.3`，当前由 glm-5.3 服务，不必再落 deepseek。
@@ -45,7 +45,7 @@
 ## 已完成
 
 - Git 原始资料基线，工作分支 `work/bootstrap`，无 remote/push。
-- M00–M16 共 17 份原始阶段文档已由 `8f8d39e` 提交到 `design/stages/`；2026-10-05 审查逐份与 ZIP 比较，字节相同。
+- M00–M16 共 17 份原始阶段文档已由 `ba1c299` 提交到 `design/stages/`；2026-10-05 审查逐份与 ZIP 比较，字节相同。
 - 兼容性、trace envelope、运行时门槛与源码映射契约；最终计划已修正阶段编号、恢复顺序、22050Hz 采样率及分页策略。
 - PCM16 比较器、严格 WAV 解析器与差异/格式边界测试。
 - 固定 eSpeak NG `ba90c8e9f440ad544f674a790bb5f53878b6ffc5`，CMake Release 静态参考程序和数据构建成功。
