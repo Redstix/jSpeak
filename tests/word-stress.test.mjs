@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWordStressSession, getVowelStress, WORD_STRESS_PROFILE } from '../src/core/word-stress.js';
+import { CMN_WORD_STRESS_PROFILE } from '../data/cmn/synthesis-profile.js';
 
 function fixture() {
   const entries = new Array(256).fill(null);
@@ -12,6 +13,13 @@ function fixture() {
   return { index: 80, name: 'en-us', nPhonemes: 51, entries };
 }
 const get = (bytes, options) => getVowelStress(Uint8Array.from(bytes), fixture(), WORD_STRESS_PROFILE, options);
+
+function cmnFixture() {
+  const table = fixture();
+  table.index = 8;
+  table.name = 'cmn';
+  return table;
+}
 
 test('GetVowelStress resolves priority, preceding-vowel and dictionary-position stress', () => {
   const priority = get([6, 40, 7, 40]);
@@ -51,6 +59,13 @@ test('SetWordStress preserves session stress through consonants/empty input and 
   const pause = session.setWordStress(Uint8Array.of(1));
   assert.equal(pause.prevLastStress, 0); assert.deepEqual(Array.from(pause.phonemes), []);
   assert.deepEqual(session.state(), { prevLastStress: 0 });
+});
+
+test('cmn SetWordStress places primary stress on the final syllable', () => {
+  const session = createWordStressSession(cmnFixture(), CMN_WORD_STRESS_PROFILE);
+  assert.deepEqual(Array.from(session.setWordStress(Uint8Array.of(40)).phonemes), [6, 40]);
+  assert.deepEqual(Array.from(session.setWordStress(Uint8Array.of(40, 40)).phonemes), [40, 6, 40]);
+  assert.deepEqual(Array.from(session.setWordStress(Uint8Array.of(40, 40, 40)).phonemes), [5, 40, 40, 6, 40]);
 });
 
 test('stress services preserve C bounded truncation and reject unsupported profiles and undefined input sizes', () => {

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWav } from '../compare/wav.mjs';
 import { dataFingerprint, hash32, makePack, sha256, verifyPack } from '../build-data/pack.mjs';
+import { createCmnSynthesizer } from '../../src/core/cmn-synthesis.js';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 export const PROFILE = Object.freeze({
@@ -105,7 +106,7 @@ function toneBearingTokens(phonemes) {
   return phonemes.trim().split(/\s+/).filter(Boolean).filter(token => /\d/.test(token));
 }
 
-function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows) {
+function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsSynthesizer) {
   const normalize = text => text.split(candidateRoot).join('<candidate>');
   const cases = rows.map(row => {
     const input = caseInput(row);
@@ -118,6 +119,11 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows) {
     const fullDiagnostics = normalize(fullPhonemes.stderr + fullAudio.result.stderr);
     const candidateDiagnostics = normalize(candidatePhonemes.stderr + candidateAudio.result.stderr);
     const phonemesEqual = fullPhonemes.status === 0 && candidatePhonemes.status === 0 && fullPhonemes.stdout === candidatePhonemes.stdout;
+    let jsPhonemes = null, jsPhonemeError = null;
+    try { jsPhonemes = jsSynthesizer.synthesizePhonemes(input).phonemeText; }
+    catch (error) { jsPhonemeError = error.message; }
+    const fullPhonemeText = fullPhonemes.stdout.endsWith('\n') ? fullPhonemes.stdout.slice(0, -1) : fullPhonemes.stdout;
+    const jsPhonemesEqual = fullPhonemes.status === 0 && jsPhonemes === fullPhonemeText;
     const wavEqual = fullWavSha256 === candidateWavSha256;
     const exact = phonemesEqual && wavEqual && !fullDiagnostics && !candidateDiagnostics;
     if (row.classification.startsWith('exact') && !exact) {
@@ -126,12 +132,21 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows) {
     if (row.classification.startsWith('unsupported') && (exact || fullPhonemes.status !== 0 || fullDiagnostics || !fullWavSha256)) {
       throw new Error('Unsupported Mandarin case did not preserve its reviewed boundary: ' + row.id);
     }
+    if (row.classification.startsWith('exact') && !jsPhonemesEqual) {
+      throw new Error('Expected exact Mandarin JS phoneme case ' + row.id + (jsPhonemeError ? ': ' + jsPhonemeError : ''));
+    }
+    if (row.classification.startsWith('unsupported') && (jsPhonemesEqual || !jsPhonemeError)) {
+      throw new Error('Unsupported Mandarin JS phoneme case was not explicit: ' + row.id);
+    }
     return {
       id: row.id,
       inputBytesHex: Buffer.from(input).toString('hex'),
       expectedClassification: row.classification,
       classification: exact ? 'exact' : row.classification,
       phonemesEqual,
+      jsPhonemes,
+      jsPhonemesEqual,
+      jsPhonemeError,
       wavEqual,
       fullPhonemes: fullPhonemes.stdout,
       candidatePhonemes: candidatePhonemes.stdout,
@@ -147,10 +162,13 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows) {
   });
   const exactCount = cases.filter(item => item.classification === 'exact').length;
   const unsupportedCount = cases.filter(item => item.classification !== 'exact').length;
+  const jsPhonemeExactCount = cases.filter(item => item.jsPhonemesEqual).length;
+  const jsPhonemeUnsupportedCount = cases.filter(item => !item.jsPhonemesEqual).length;
   return {
     kind: 'isolated-candidate-c-data-comparison', profile: PROFILE,
     closureComplete: false,
     caseCount: cases.length, exactCount, unsupportedCount,
+    jsPhonemeExactCount, jsPhonemeUnsupportedCount,
     note: 'Exact agreement proves only the fixed corpus and selected runtime files. The explicit en-us voice switch is unsupported because the standalone cmn pack intentionally omits en_dict. This comparison is not a JS runtime result.',
     cases
   };
@@ -197,7 +215,13 @@ export function buildLanguageData({ root = ROOT, output = path.join(root, 'artif
       sampleCount: wav.samples.length, channels: 1, bitsPerSample: 16, headerLength: 44, dataOffset: 44, repeatRuns: 2
     };
     const corpus = JSON.parse(readFileSync(new URL('corpus.json', import.meta.url), 'utf8'));
-    const comparison = compareCandidate(binary, build, candidateRoot, temp, base, corpus);
+    const jsSynthesizer = createCmnSynthesizer({
+      dictionaryBytes: byPackage.get('cmn_dict.txt'),
+      phontabBytes: byPackage.get('phontab.txt'),
+      phonindexBytes: byPackage.get('phonindex.txt'),
+      phondataBytes: byPackage.get('phondata.txt')
+    });
+    const comparison = compareCandidate(binary, build, candidateRoot, temp, base, corpus, jsSynthesizer);
     const selectedNames = new Set(entries.map(file => file.sourcePath));
     const provenance = {
       schemaVersion: 1, upstreamCommit: config.commit, repository: config.repository, buildStamp: stamp,
@@ -212,7 +236,12 @@ export function buildLanguageData({ root = ROOT, output = path.join(root, 'artif
           'not consumed by the known fixed cmn profile; production closure unresolved'
       })),
       closureComplete: false,
-      jsRuntime: { synthesisSupported: false, reason: 'M12 fixed en-us JS text→command path is not yet C-exact and no cmn JS frontend has been accepted' },
+      jsRuntime: {
+        synthesisSupported: false,
+        phonemeSynthesisSupported: true,
+        pcmSynthesisSupported: false,
+        reason: 'The reviewed cmn JS text→phoneme frontend is C-exact for the fixed corpus; JS PCM is not yet compared or accepted'
+      },
       license: { notice: 'THIRD_PARTY_NOTICES.md', upstreamLicense: 'upstream/espeak-ng/COPYING', sourceCommit: config.commit },
       caveats: ['cmn_list, cmn_rules and cmn_emoji are source-input provenance; cmn_dict is the unmodified upstream compiled runtime dependency.',
         'All shared phoneme tables, instructions, waves and intonations remain unmodified.',
@@ -242,5 +271,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const { manifest, comparison, output } = buildLanguageData();
   console.log('cmn pack verified: ' + manifest.files.length + ' files / ' + manifest.totalDataBytes + ' data bytes; ' + manifest.dataFingerprint);
   console.log('Mandarin C differential: ' + comparison.exactCount + ' exact, ' + comparison.unsupportedCount + ' explicit unsupported; closureComplete=false.');
+  console.log('Mandarin JS phoneme differential: ' + comparison.jsPhonemeExactCount + ' exact, ' + comparison.jsPhonemeUnsupportedCount + ' explicit unsupported; PCM not compared.');
   console.log('Output: ' + output);
 }

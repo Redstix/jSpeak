@@ -9,7 +9,7 @@ import { LETTER_BITS, REMOVE_ACCENT, RULE_PROFILE } from '../../data/rules/profi
 import { getVowelStress, WORD_STRESS_PROFILE } from './word-stress.js';
 import { removeEnding, WORD_ENDING_PROFILE } from './word-ending.js';
 import { createNumberTranslation } from './number-translation.js';
-import { CMN_NUMBER_PROFILE, CMN_WORD_ENDING_PROFILE, CMN_WORD_STRESS_PROFILE, CMN_WORD_TRANSLATION_PROFILE } from '../../data/cmn/synthesis-profile.js';
+import { CMN_NUMBER_PROFILE, CMN_TEXT_CHARACTER_PROFILE, CMN_WORD_ENDING_PROFILE, CMN_WORD_STRESS_PROFILE, CMN_WORD_TRANSLATION_PROFILE } from '../../data/cmn/synthesis-profile.js';
 import { isSuperscript, nonAsciiNumber, HEX_LETTER_NAMES } from './derived-letter.js';
 import { encodePhonemes } from './phoneme-encode.js';
 
@@ -516,7 +516,8 @@ export function createWordTranslationSession(services, selectedTable, initialSta
       var previous = cp, decoded = readForward(source, index); cp = decoded.codepoint;
       var insertSpace = false;
       if (isAlpha(previous)) {
-        if (isAlpha(cp)) insertSpace = shouldSplitIdeographs(cp, previous);
+        if (isAlpha(cp)) insertSpace = shouldSplitIdeographs(cp, previous,
+          profile.voice === 'cmn' ? CMN_TEXT_CHARACTER_PROFILE : undefined);
         else if (cp === 45) {
           if (isAlpha(readForward(source, index + decoded.bytes).codepoint)) {
             if (offset + 2 > out.length) break;

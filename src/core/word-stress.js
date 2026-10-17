@@ -118,10 +118,20 @@ export function createWordStressSession(table, profile, options) {
     var scanned = scanVowelStress(phonetic, table, profile, stressedSyllable, 1);
     var vowelStress = scanned.vowelStress, count = scanned.vowelCount, maximum = scanned.maxStress;
     if (maximum < 0 && dictionaryFlags !== null) maximum = 0;
+    if (profile.stressRule === 3 && stressedSyllable === 0) {
+      stressedSyllable = count - 1;
+      while (stressedSyllable > 0) {
+        if (vowelStress[stressedSyllable] < 1) {
+          vowelStress[stressedSyllable] = 4;
+          break;
+        }
+        stressedSyllable--;
+      }
+      maximum = 4;
+    }
     // The measured en-us rule is STRESSPOSN_1L (0), with stress_flags=8.
-    // No switch case or syllable-weight-dependent option in SetWordStress is
-    // active. All language-specific stress rules and weight-only calculations
-    // therefore have no effect on this profile's defined observable behavior.
+    // No switch case or syllable-weight-dependent option is active for that
+    // profile. cmn uses the final-syllable branch above with S_NO_DIM.
     var stress = maximum < 4 ? 4 : 3;
     for (var v = 1; v < count; v++) {
       if (vowelStress[v] < 0 && vowelStress[v - 1] <= 1 && (vowelStress[v + 1] <= 1 || (stress === 4 && vowelStress[v + 1] <= 2))) {
@@ -153,7 +163,8 @@ export function createWordStressSession(table, profile, options) {
         prevLastStress = currentStress;
         if (currentStress <= 1) {
           if (v === 1 || v === count - 1) currentStress = 1;
-          else if (v === count - 2 && vowelStress[count - 1] <= 1) currentStress = 1;
+        else if ((profile.stressFlags & 2) !== 0 ||
+                 (v === count - 2 && vowelStress[count - 1] <= 1)) currentStress = 1;
           else { currentStress = 0; vowelStress[v] = 0; }
         }
         if (currentStress === 0 || currentStress > 1) output[out++] = STRESS_PHONEMES[currentStress];

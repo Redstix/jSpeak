@@ -33,6 +33,8 @@ export function verifyLanguageDirectory(directory) {
   if (comparison.kind !== 'isolated-candidate-c-data-comparison' || comparison.profile.voice !== 'cmn' ||
       comparison.closureComplete !== false || !Array.isArray(comparison.cases) ||
       comparison.exactCount + comparison.unsupportedCount !== comparison.caseCount ||
+      comparison.jsPhonemeExactCount + comparison.jsPhonemeUnsupportedCount !== comparison.caseCount ||
+      comparison.jsPhonemeExactCount !== 29 || comparison.jsPhonemeUnsupportedCount !== 1 ||
       comparison.cases.some(item => item.classification === 'exact' ? !(item.phonemesEqual && item.wavEqual && !item.fullDiagnostics && !item.candidateDiagnostics) : item.classification !== item.expectedClassification)) {
     throw new Error('Invalid Mandarin candidate comparison record');
   }

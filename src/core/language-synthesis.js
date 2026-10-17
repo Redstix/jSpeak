@@ -97,8 +97,9 @@ export function createLanguageSynthesizer({
   const lengthCalculator = createLengthCalculator(table, profile.prosodyProfile);
   const phonemeMaker = createPhonemeListMaker(phonindexBytes, table, profile.phonemePrepareProfile);
 
-  function synthesize(text) {
+  function synthesize(text, options) {
     const input = typeof text === 'string' ? encodeUtf8(text) : text;
+    const phonemesOnly = options !== undefined && options !== null && options.phonemesOnly === true;
     if (!(input instanceof Uint8Array)) throw new TypeError('Expected text string or UTF-8 bytes');
     if (input.length > MAX_INPUT_BYTES) {
       const error = new Error('Input exceeds bounded profile: ' + MAX_INPUT_BYTES + ' bytes');
@@ -127,6 +128,7 @@ export function createLanguageSynthesizer({
       const lengthened = lengthCalculator.calculate(pitched.list, pitched.count,
         { list: clause.phonemes.state.embeddedList, index: 0 });
       phonemeLines.push(translatedPhonemeString(lengthened.list, lengthened.count, table));
+      if (phonemesOnly) continue;
       const events = eventPlanner.plan(lengthened.list, lengthened.count,
         { list: clause.phonemes.state.embeddedList, clauseStartChar: clause.startCharacter,
           countCharacters: 0, countSentences: 0, clauseStartWord: clause.startWord - 1 });
@@ -137,6 +139,10 @@ export function createLanguageSynthesizer({
     const phonemeText = phonemeLines.join('\n');
     if (!commands.length) return { commands, sampleCount: 0, inputBytes, clauseCount, phonemeText };
     return { commands, voice: voiceState, sampleRate: 22050, clauseCount, inputBytes, phonemeText };
+  }
+
+  function synthesizePhonemes(text) {
+    return synthesize(text, { phonemesOnly: true });
   }
 
   function synthesizePcm(text, options) {
@@ -192,6 +198,6 @@ export function createLanguageSynthesizer({
     return result;
   }
 
-  return { synthesize, synthesizePcm, synthesizeWav,
+  return { synthesize, synthesizePhonemes, synthesizePcm, synthesizeWav,
     profile: { voice: profile.voice, sampleRate: 22050, maxInputBytes: MAX_INPUT_BYTES, maxClauses: MAX_CLAUSES } };
 }
