@@ -467,6 +467,7 @@ export function createWaveGenerator(options) {
     if (ix > 127) ix = 127;
     let x = Math.imul(wdata.pitchEnv[ix], wdata.pitchRange);
     wdata.pitch = add32(x >> 8, wdata.pitchBase);
+    ampIx = add32(ampIx, ampInc);
     if (flutterIndex >= C.N_FLUTTER * 64) flutterIndex = 0;
     x = mul32(flutterTable[flutterIndex >> 6] - 0x80, flutterAmp);
     flutterIndex += flutterInc;
@@ -693,7 +694,7 @@ export function createWaveGenerator(options) {
       let z = Math.imul(z1, agc) >> 8;
       if (z >= 32768 || z <= -32768) {
         if (z1 === 0) unsupported('automatic-gain-division-by-zero');
-        const ov = Math.trunc(8388608 / z1) - 1;
+        const ov = Math.trunc((z1 > 0 ? 8388608 : -8388608) / z1) - 1;
         if (ov < agc) agc = ov;
         z = Math.imul(z1, agc) >> 8;
       }

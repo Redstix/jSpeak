@@ -106,9 +106,10 @@ function toneBearingTokens(phonemes) {
   return phonemes.trim().split(/\s+/).filter(Boolean).filter(token => /\d/.test(token));
 }
 
-function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsSynthesizer) {
+async function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsSynthesizer) {
   const normalize = text => text.split(candidateRoot).join('<candidate>');
-  const cases = rows.map(row => {
+  const cases = [];
+  for (const row of rows) {
     const input = caseInput(row);
     const fullPhonemes = runOracle(binary, fullRoot, [...base, '-q', '-x'], input);
     const candidatePhonemes = runOracle(binary, candidateRoot, [...base, '-q', '-x'], input);
@@ -124,6 +125,13 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsS
     catch (error) { jsPhonemeError = error.message; }
     const fullPhonemeText = fullPhonemes.stdout.endsWith('\n') ? fullPhonemes.stdout.slice(0, -1) : fullPhonemes.stdout;
     const jsPhonemesEqual = fullPhonemes.status === 0 && jsPhonemes === fullPhonemeText;
+    let jsWavSha256 = null, jsWavError = null, jsSampleCount = 0;
+    try {
+      const synthesized = await jsSynthesizer.synthesizeWav(input, callback => callback());
+      jsWavSha256 = sha256(synthesized.wav);
+      jsSampleCount = synthesized.sampleCount;
+    } catch (error) { jsWavError = error.message; }
+    const jsWavEqual = fullWavSha256 ? jsWavSha256 === fullWavSha256 : jsSampleCount === 0;
     const wavEqual = fullWavSha256 === candidateWavSha256;
     const exact = phonemesEqual && wavEqual && !fullDiagnostics && !candidateDiagnostics;
     if (row.classification.startsWith('exact') && !exact) {
@@ -138,7 +146,13 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsS
     if (row.classification.startsWith('unsupported') && (jsPhonemesEqual || !jsPhonemeError)) {
       throw new Error('Unsupported Mandarin JS phoneme case was not explicit: ' + row.id);
     }
-    return {
+    if (row.classification.startsWith('exact') && !jsWavEqual) {
+      throw new Error('Expected exact Mandarin JS PCM case ' + row.id + (jsWavError ? ': ' + jsWavError : ''));
+    }
+    if (row.classification.startsWith('unsupported') && (jsWavEqual || !jsWavError)) {
+      throw new Error('Unsupported Mandarin JS PCM case was not explicit: ' + row.id);
+    }
+    const record = {
       id: row.id,
       inputBytesHex: Buffer.from(input).toString('hex'),
       expectedClassification: row.classification,
@@ -148,6 +162,10 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsS
       jsPhonemesEqual,
       jsPhonemeError,
       wavEqual,
+      jsWavSha256,
+      jsWavEqual,
+      jsWavError,
+      jsSampleCount,
       fullPhonemes: fullPhonemes.stdout,
       candidatePhonemes: candidatePhonemes.stdout,
       toneBearingTokens: toneBearingTokens(fullPhonemes.stdout),
@@ -159,22 +177,26 @@ function compareCandidate(binary, fullRoot, candidateRoot, temp, base, rows, jsS
       fullDiagnostics,
       candidateDiagnostics
     };
-  });
+    cases.push(record);
+  }
   const exactCount = cases.filter(item => item.classification === 'exact').length;
   const unsupportedCount = cases.filter(item => item.classification !== 'exact').length;
   const jsPhonemeExactCount = cases.filter(item => item.jsPhonemesEqual).length;
   const jsPhonemeUnsupportedCount = cases.filter(item => !item.jsPhonemesEqual).length;
+  const jsWavExactCount = cases.filter(item => item.jsWavEqual).length;
+  const jsWavUnsupportedCount = cases.filter(item => !item.jsWavEqual).length;
   return {
     kind: 'isolated-candidate-c-data-comparison', profile: PROFILE,
     closureComplete: false,
     caseCount: cases.length, exactCount, unsupportedCount,
     jsPhonemeExactCount, jsPhonemeUnsupportedCount,
-    note: 'Exact agreement proves only the fixed corpus and selected runtime files. The explicit en-us voice switch is unsupported because the standalone cmn pack intentionally omits en_dict. This comparison is not a JS runtime result.',
+    jsWavExactCount, jsWavUnsupportedCount,
+    note: 'Exact agreement proves only the fixed corpus and selected runtime files. The explicit en-us voice switch is unsupported because the standalone cmn pack intentionally omits en_dict. The comparison includes the fixed JS phoneme and PCM runtime paths.',
     cases
   };
 }
 
-export function buildLanguageData({ root = ROOT, output = path.join(root, 'artifacts/cmn-language-pack') } = {}) {
+export async function buildLanguageData({ root = ROOT, output = path.join(root, 'artifacts/cmn-language-pack') } = {}) {
   const build = path.join(root, 'build/oracle');
   const { config, stamp, lock, sourceInventory, sourceInputs } = validateSource(root, build);
   const sourceData = path.join(build, 'espeak-ng-data');
@@ -221,7 +243,7 @@ export function buildLanguageData({ root = ROOT, output = path.join(root, 'artif
       phonindexBytes: byPackage.get('phonindex.txt'),
       phondataBytes: byPackage.get('phondata.txt')
     });
-    const comparison = compareCandidate(binary, build, candidateRoot, temp, base, corpus, jsSynthesizer);
+    const comparison = await compareCandidate(binary, build, candidateRoot, temp, base, corpus, jsSynthesizer);
     const selectedNames = new Set(entries.map(file => file.sourcePath));
     const provenance = {
       schemaVersion: 1, upstreamCommit: config.commit, repository: config.repository, buildStamp: stamp,
@@ -237,10 +259,10 @@ export function buildLanguageData({ root = ROOT, output = path.join(root, 'artif
       })),
       closureComplete: false,
       jsRuntime: {
-        synthesisSupported: false,
+        synthesisSupported: true,
         phonemeSynthesisSupported: true,
-        pcmSynthesisSupported: false,
-        reason: 'The reviewed cmn JS text→phoneme frontend is C-exact for the fixed corpus; JS PCM is not yet compared or accepted'
+        pcmSynthesisSupported: true,
+        reason: 'The reviewed cmn JS text→phoneme and text→PCM paths are C-exact for the fixed corpus; dynamic en-us switching remains explicit unsupported'
       },
       license: { notice: 'THIRD_PARTY_NOTICES.md', upstreamLicense: 'upstream/espeak-ng/COPYING', sourceCommit: config.commit },
       caveats: ['cmn_list, cmn_rules and cmn_emoji are source-input provenance; cmn_dict is the unmodified upstream compiled runtime dependency.',
@@ -268,9 +290,10 @@ export function buildLanguageData({ root = ROOT, output = path.join(root, 'artif
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.length > 2) throw new Error('Usage: node tools/build-language/build.mjs');
-  const { manifest, comparison, output } = buildLanguageData();
+  const { manifest, comparison, output } = await buildLanguageData();
   console.log('cmn pack verified: ' + manifest.files.length + ' files / ' + manifest.totalDataBytes + ' data bytes; ' + manifest.dataFingerprint);
   console.log('Mandarin C differential: ' + comparison.exactCount + ' exact, ' + comparison.unsupportedCount + ' explicit unsupported; closureComplete=false.');
-  console.log('Mandarin JS phoneme differential: ' + comparison.jsPhonemeExactCount + ' exact, ' + comparison.jsPhonemeUnsupportedCount + ' explicit unsupported; PCM not compared.');
+  console.log('Mandarin JS phoneme differential: ' + comparison.jsPhonemeExactCount + ' exact, ' + comparison.jsPhonemeUnsupportedCount + ' explicit unsupported.');
+  console.log('Mandarin JS PCM differential: ' + comparison.jsWavExactCount + ' exact, ' + comparison.jsWavUnsupportedCount + ' explicit unsupported.');
   console.log('Output: ' + output);
 }

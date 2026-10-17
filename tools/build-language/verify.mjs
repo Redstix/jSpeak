@@ -28,13 +28,17 @@ export function verifyLanguageDirectory(directory) {
   if (provenance.upstreamCommit !== lock.upstreamCommit || provenance.profile.voice !== 'cmn' ||
       provenance.sourceDataFingerprint !== lock.sourceDataFingerprint || provenance.selectedDataFingerprint !== manifest.dataFingerprint ||
       JSON.stringify(provenance.sourceInputs) !== JSON.stringify(lock.sourceInputs) || provenance.closureComplete !== false ||
-      provenance.jsRuntime.synthesisSupported !== false) throw new Error('Mandarin provenance identity mismatch');
+      provenance.jsRuntime.synthesisSupported !== true ||
+      provenance.jsRuntime.phonemeSynthesisSupported !== true ||
+      provenance.jsRuntime.pcmSynthesisSupported !== true) throw new Error('Mandarin provenance identity mismatch');
   const comparison = JSON.parse(getBytes('candidate-comparison.json'));
   if (comparison.kind !== 'isolated-candidate-c-data-comparison' || comparison.profile.voice !== 'cmn' ||
       comparison.closureComplete !== false || !Array.isArray(comparison.cases) ||
       comparison.exactCount + comparison.unsupportedCount !== comparison.caseCount ||
       comparison.jsPhonemeExactCount + comparison.jsPhonemeUnsupportedCount !== comparison.caseCount ||
       comparison.jsPhonemeExactCount !== 29 || comparison.jsPhonemeUnsupportedCount !== 1 ||
+      comparison.jsWavExactCount + comparison.jsWavUnsupportedCount !== comparison.caseCount ||
+      comparison.jsWavExactCount !== 29 || comparison.jsWavUnsupportedCount !== 1 ||
       comparison.cases.some(item => item.classification === 'exact' ? !(item.phonemesEqual && item.wavEqual && !item.fullDiagnostics && !item.candidateDiagnostics) : item.classification !== item.expectedClassification)) {
     throw new Error('Invalid Mandarin candidate comparison record');
   }

@@ -12,7 +12,8 @@ const C = Object.freeze({
   FRFLAG_BREAK_LF: 8, FRFLAG_BREAK: 16, FRFLAG_FORMANT_RATE: 32,
   FRFLAG_MODULATE: 64, FRFLAG_DEFER_WAV: 128,
   FRFLAG_LEN_MOD2: 0x4000, FRFLAG_COPIED: 0x8000,
-  pd_DONTLENGTHEN: 4, N_SEQ_FRAMES: 12, N_PEAKS: 9,
+  pd_DONTLENGTHEN: 4, N_SEQ_FRAMES: 12, N_PEAKS: 9, phVOWEL: 2, phLIQUID: 3, phNASAL: 8,
+  phNOPAUSE: 1 << 24,
 });
 const FORMANT_RATE = [240, 170, 170, 170, 170, 170];
 
@@ -138,8 +139,8 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     fmtAmplitude = 0; beginning = true;
   }
 
-  function copyFrame(frame) {
-    if ((frame.frflags & C.FRFLAG_COPIED) !== 0) return frame;
+  function copyFrame(frame, force) {
+    if (!force && (frame.frflags & C.FRFLAG_COPIED) !== 0) return frame;
     framePoolIndex = (framePoolIndex + 1) % 170;
     const copy = { ...frame, ffreq: frame.ffreq.slice(), fheight: frame.fheight.slice(),
       fwidth: frame.fwidth.slice(), fright: frame.fright.slice(),
@@ -178,11 +179,11 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     return f1 < 500 ? 1 : 0;
   }
 
-  function duplicateLastFrame(frames, length) {
-    frames[frames.length - 1].length = length;
-    const copy = copyFrame(frames[frames.length - 1].frame);
+  function duplicateLastFrame(frames, activeCount, length) {
+    frames[activeCount - 1].length = length;
+    const copy = copyFrame(frames[activeCount - 1].frame, true);
     copy.frflags = signedFlags((copy.frflags & ~C.FRFLAG_COPIED) | C.FRFLAG_COPIED);
-    frames.push({ frame: copy, frflags: copy.frflags, length: 0 });
+    frames[activeCount] = { frame: copy, frflags: copy.frflags, length: 0 };
     return copy;
   }
 
@@ -209,13 +210,14 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     } else if (f1Adj === 3) {
       x = 100 - frame.ffreq[1];
       if (x < -400) x = -400;
+      if (x > -300) x = -400;
       frame.ffreq[1] += x; frame.ffreq[0] += x;
     }
     reduceHf(frame, hfReduce);
   }
 
-  function formantTransition(frames, data1, data2, otherPhoneme, which) {
-    if (frames.length < 2) return 0;
+  function formantTransition(frames, activeCount, data1, data2, otherPhoneme, which) {
+    if (activeCount < 2) return { length: 0, count: activeCount, seqLenAdjustDelta: 0 };
     let len = (data1 & 0x3f) * 2, rms = (data1 >> 6) & 0x3f, flags = data1 >> 12;
     const f2 = (data2 & 0x3f) * 50;
     const f2Min = (((data2 >> 6) & 0x1f) - 15) * 50;
@@ -226,6 +228,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     const vcolour = data2 >> 29;
     if (otherPhoneme && otherPhoneme.mnemonic === (0x3f | (0x3f << 8))) flags |= 8;
     let frame = null;
+    let seqLenAdjustDelta = 0;
     if (which === 1) {
       frame = copyFrame(frames[0].frame);
       frames[0].frame = frame;
@@ -238,25 +241,29 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
         adjustFormants(frame, f2, f2Min, f2Max, f1, f3Adj, f3Amp, flags);
         if ((rms & 0x20) === 0) setRms(frame, rms * 2);
       } else if (flags & 8) setRms(frame, Math.trunc((nextRms * 24) / 32));
-      else setRms(frame, 128);
+      else setRms(frame, 28);
       if (flags & 8) modnFlags = 0x800 + (vowelCloseness(frame) << 8);
     } else {
       rms *= 2;
       if (f2 !== 0 || flags !== 0) {
         if (flags & 8) {
-          frame = copyFrame(frames[frames.length - 1].frame);
-          frames[frames.length - 1].frame = frame;
-          rms = 160;
+          frame = copyFrame(frames[activeCount - 1].frame);
+          frames[activeCount - 1].frame = frame;
+          rms = 35;
           modnFlags = 0x400 + (vowelCloseness(frame) << 8);
         } else {
-          frame = duplicateLastFrame(frames, len);
+          frame = duplicateLastFrame(frames, activeCount, len);
+          activeCount++;
+          if (len > 36) seqLenAdjustDelta += len - 36;
+          if (f2 !== 0) adjustFormants(frame, f2, f2Min, f2Max, f1, f3Adj, f3Amp, flags);
         }
         setRms(frame, rms);
         const colours = [[243, 272, 256, 256, 256], [256, 256, 240, 240, 240]];
         if (vcolour > 0 && vcolour <= 2) {
-          for (const row of frames) {
-            const copy = copyFrame(row.frame);
-            row.frame = copy;
+          for (let row = 0; row < activeCount; row++) {
+            const target = frames[row];
+            const copy = copyFrame(target.frame);
+            target.frame = copy;
             for (let formant = 1; formant <= 5; formant++) {
               copy.ffreq[formant] = Math.trunc((copy.ffreq[formant] * colours[vcolour - 1][formant - 1]) / 256);
             }
@@ -268,7 +275,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
       if (flags & 4) frame.frflags = signedFlags(frame.frflags | C.FRFLAG_FORMANT_RATE);
       if (flags & 2) frame.frflags = signedFlags(frame.frflags | C.FRFLAG_BREAK);
     }
-    return flags & 16 ? len : 0;
+    return { length: flags & 16 ? len : 0, count: activeCount, seqLenAdjustDelta };
   }
 
   function lookupSpect(event) {
@@ -290,7 +297,9 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
       else { frames.splice(0, breakAt); nf -= breakAt; }
     }
     if (event.type === 2 && event.fmt2Addr === 0 && event.useVowelin) {
-      seqLenAdjust += formantTransition(frames, event.transition0, event.transition1, null, event.which);
+      const transition = formantTransition(frames, nf, event.transition0, event.transition1, null, event.which);
+      seqLenAdjust += transition.length + transition.seqLenAdjustDelta;
+      nf = transition.count;
     }
     let length1 = 0;
     const nf1 = nf - 1;
@@ -398,7 +407,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   }
 
   function push(type, a, b, c) {
-    if (queue.length >= 170) throw new Error('Generate command queue capacity exceeded');
+    if (queue.length >= 100000) throw new Error('Generate command queue capacity exceeded');
     queue.push({ type, a, b: b === undefined ? null : b, c: c === undefined ? null : c });
     return queue.length - 1;
   }
@@ -544,7 +553,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
       const target = queue[lastQueueCommand];
       target.c = frame1;
       if (lastFrame.frflags & C.FRFLAG_BREAK_LF) {
-        const copy = copyFrame(frame1);
+        const copy = copyFrame(frame1, true);
         copy.frflags = signedFlags(copy.frflags | C.FRFLAG_BREAK_LF);
         for (let ix = 3; ix < 8; ix++) {
           if (ix < 7) copy.ffreq[ix] = lastFrame.ffreq[ix];
@@ -602,6 +611,16 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   function process(events) {
     reset();
     if (!events || !Array.isArray(events) || events.length > 100000) throw new RangeError('Invalid high-level event plan');
+    const nextPhonemeType = new Map();
+    let pendingPhoneme = null;
+    for (const event of events) {
+      if (event.kind === 'phoneme') {
+        if (pendingPhoneme !== null) nextPhonemeType.set(pendingPhoneme, event.type);
+        pendingPhoneme = event.index;
+      }
+    }
+    let previousPhonemeType = null;
+    let resetLastFrameAfterPhoneme = false;
     for (const event of events) {
       if (event.kind === 'generate.begin') {
         doPause(0, 0); continue;
@@ -618,7 +637,25 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
       else if (event.kind === 'endPitch') endPitch(event.voiceBreak ? 1 : 0);
       else if (event.kind === 'sample3') doSample3(event);
       else if (event.kind === 'spect2') doSpect2({ ...event });
-      else if (event.kind === 'phoneme') endAmplitude();
+      else if (event.kind === 'phoneme') {
+        if (resetLastFrameAfterPhoneme) { lastFrame = null; resetLastFrameAfterPhoneme = false; }
+        endAmplitude();
+        if (event.newword) {
+          const phoneme = selectedTable.entries[event.code];
+          if (!((event.type === C.phVOWEL) || (phoneme && (phoneme.phflags & C.phNOPAUSE)))) lastFrame = null;
+        }
+        if (event.type === C.phNASAL) {
+          if (previousPhonemeType === C.phNASAL) lastFrame = null;
+          const nextType = nextPhonemeType.get(event.index);
+          if (!(nextType === C.phVOWEL || (previousPhonemeType === C.phVOWEL && (event.synthflags & 1)))) {
+            lastFrame = null;
+            resetLastFrameAfterPhoneme = true;
+          }
+        } else if (event.type === C.phLIQUID && previousPhonemeType === C.phNASAL) {
+          lastFrame = null;
+        }
+        previousPhonemeType = event.type;
+      }
       else if (event.kind === 'startSyllable') { if (syllableEnd === syllableStart) syllableEnd = queue.length; }
       else if (event.kind === 'marker') doMarker(event.type, event.charPosn, event.length, event.value);
     }

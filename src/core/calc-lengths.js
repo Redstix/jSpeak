@@ -192,23 +192,24 @@ export function createLengthCalculator(selectedTable, profile, dependencies) {
         if (nextPh.code === C.phonPAUSE_VSHORT && list.type[next2Index] === C.phPAUSE) {
           nextIndex2 = next2Index; next2Index2 = next3Index; next3Index2 = ix + 4;
         }
+        const nextPh2 = selectedTable.entries[list.phcode[nextIndex2]];
         const next2Ph2 = selectedTable.entries[list.phcode[next2Index2]];
         const next3Ph2 = selectedTable.entries[list.phcode[next3Index2]];
-        if (!next2Ph2 || !next3Ph2) unsupported('phoneme-neighbor');
+        if (!nextPh2 || !next2Ph2 || !next3Ph2) unsupported('phoneme-neighbor');
         let next2Type = next2Ph2.lengthMod;
         let lengthMod;
         if (moreSyllables === 0) {
           if (list.newword[nextIndex2] || list.newword[next2Index2]) {
             if (next2Type !== 1) next2Type = 0;
           }
-          const len = lengthMods0[next2Type * 10 + nextPh.lengthMod];
+          const len = lengthMods0[next2Type * 10 + nextPh2.lengthMod];
           if (list.newword[nextIndex2] && (supplied.word_gap & 0x20)) {
-            lengthMod = divide(len + lengthMods0[nextPh.lengthMod * 10 + 1], 2);
+            lengthMod = divide(len + lengthMods0[nextPh2.lengthMod * 10 + 1], 2);
           } else lengthMod = len;
         } else {
           lengthMod = lengthMods[next2Type * 10 + nextPh.lengthMod];
-          if (list.type[nextIndex] === C.phNASAL && (list.type[next2Index] === C.phSTOP || list.type[next2Index] === C.phVSTOP) &&
-              (next3Ph.phflags & C.phVOICELESS)) lengthMod -= 15;
+          if (list.type[nextIndex2] === C.phNASAL && (list.type[next2Index2] === C.phSTOP || list.type[next2Index2] === C.phVSTOP) &&
+              (next3Ph2.phflags & C.phVOICELESS)) lengthMod -= 15;
         }
         if (moreSyllables === 0) lengthMod *= lenSpeeds[0];
         else if (moreSyllables === 1) lengthMod *= lenSpeeds[1];
