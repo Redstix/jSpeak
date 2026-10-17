@@ -94,7 +94,7 @@ export function createLanguageSynthesizer({
   const eventPlanner = createGenerateEventPlanner(phonindexBytes, table, { phondataBytes });
   const commandPlanner = createWaveCommandPlanner(phondataBytes, table, { voice: voiceState });
   const pitchCalculator = createPitchCalculator(table, profile.pitchCalculatorProfile);
-  const lengthCalculator = createLengthCalculator(table, profile.prosodyProfile);
+  const lengthCalculator = createLengthCalculator(table, profile.prosodyProfile, { phonindexBytes, phondataBytes });
   const phonemeMaker = createPhonemeListMaker(phonindexBytes, table, profile.phonemePrepareProfile);
 
   function synthesize(text, options) {

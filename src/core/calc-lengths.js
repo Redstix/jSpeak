@@ -3,6 +3,7 @@
 // See licenses/espeak-ng/COPYING.txt.
 import { PROSODY_PROFILE } from '../../data/prosody/profile.js';
 import { CMN_PROSODY_PROFILE } from '../../data/cmn/synthesis-profile.js';
+import { createPhonemeInterpreter, createPhonemeListBuffer } from './phoneme-interpreter.js';
 
 export var LENGTH_CONSTANTS = Object.freeze({
   phPAUSE: 0, phVOWEL: 2, phLIQUID: 3, phSTOP: 4, phVSTOP: 5,
@@ -42,7 +43,7 @@ function integer(value, minimum, maximum, name) {
 
 function divide(value, divisor) { return Math.trunc(value / divisor); }
 
-export function createLengthCalculator(selectedTable, profile) {
+export function createLengthCalculator(selectedTable, profile, dependencies) {
   if (!selectedTable || !Array.isArray(selectedTable.entries) || selectedTable.entries.length !== 256) throw new TypeError('Expected selected phoneme table');
   const supplied = profile || PROSODY_PROFILE;
   const knownProfiles = { 'en-us': PROSODY_PROFILE, cmn: CMN_PROSODY_PROFILE };
@@ -50,6 +51,29 @@ export function createLengthCalculator(selectedTable, profile) {
   if (!expectedProfile || JSON.stringify(supplied) !== JSON.stringify(expectedProfile)) throw new Error('Unsupported CalcLengths profile');
   const stressAmps = supplied.stressAmps, stressLengths = supplied.stressLengths, lenSpeeds = supplied.lenSpeeds;
   const lengthMods = supplied.length_mods, lengthMods0 = supplied.length_mods0;
+  const suppliedDependencies = dependencies || {};
+  let toneInterpreter = null, phondataBytes = null;
+  if (supplied.voice === 'cmn') {
+    if (!(suppliedDependencies.phonindexBytes instanceof Uint8Array) ||
+        !(suppliedDependencies.phondataBytes instanceof Uint8Array)) {
+      throw new TypeError('Expected complete cmn tone phoneme data');
+    }
+    phondataBytes = suppliedDependencies.phondataBytes;
+    toneInterpreter = createPhonemeInterpreter(suppliedDependencies.phonindexBytes, selectedTable);
+  }
+
+  function toneEnvelopeFirst(code) {
+    const isolated = createPhonemeListBuffer(4);
+    for (let index = 0; index < 4; index++) isolated.phcode[index] = 9;
+    isolated.phcode[1] = code;
+    isolated.phonemeId[1] = code + 1;
+    isolated.sourceix[2] = 1;
+    const toneData = toneInterpreter.interpret(isolated, 1, { start: 0, control: 0, translator: false, wordData: null });
+    const address = toneData.pitchEnv;
+    if (address === 0) return ENVELOPE[0].first;
+    if (address < 0 || address + 128 > phondataBytes.length) unsupported('tone-envelope-bounds');
+    return phondataBytes[address];
+  }
 
   function calculate(list, count, embedded) {
     if (!list || !Number.isInteger(count) || count < 2 || count > list.phcode.length) throw new RangeError('Invalid phoneme list bounds');
@@ -213,8 +237,8 @@ export function createLengthCalculator(selectedTable, profile) {
         list.length[ix] = lengthMod;
 
         const env2 = list.env[ix] + 1;
-        const pitchEnvelope = envelope(env2);
-        const pitchStart = list.pitch1[ix] + divide((list.pitch2[ix] - list.pitch1[ix]) * pitchEnvelope.first, 256);
+        const pitchEnvelopeFirst = list.tonePh[ix] !== 0 ? toneEnvelopeFirst(list.tonePh[ix]) : envelope(env2).first;
+        const pitchStart = list.pitch1[ix] + divide((list.pitch2[ix] - list.pitch1[ix]) * pitchEnvelopeFirst, 256);
         if (preSonorant || preVoiced) {
           if (pitchStart === 255) lastPitch = pitchStart;
           if (pitchStart - lastPitch > 16) lastPitch = pitchStart - 16;

@@ -14,7 +14,7 @@ const C = Object.freeze({
   FRFLAG_LEN_MOD2: 0x4000, FRFLAG_COPIED: 0x8000,
   pd_DONTLENGTHEN: 4, N_SEQ_FRAMES: 12, N_PEAKS: 9,
 });
-const FORMANT_RATE = [160, 135, 135, 120, 120, 120];
+const FORMANT_RATE = [240, 170, 170, 170, 170, 170];
 
 export const DEFAULT_EN_US_VOICE = Object.freeze({
   pitchBase: 290816, pitchRange: 4104, flutter: 64, roughness: 2, echoDelay: 0,
@@ -45,6 +45,25 @@ export const DEFAULT_EN_US_VOICE = Object.freeze({
   })(),
 });
 export const DEFAULT_22050_VOICE = DEFAULT_EN_US_VOICE;
+export const DEFAULT_CMN_VOICE = Object.freeze({
+  ...DEFAULT_EN_US_VOICE,
+  formantFactor: 254,
+  toneAdjust: (() => {
+    const points = [600, 170, 1200, 135, 2000, 110, 3000, 110, 8000, 110];
+    const result = new Array(1000).fill(0);
+    let frequency = 0, height = points[1];
+    for (let point = 0; point < 10; point += 2) {
+      const nextFrequency = Math.trunc(points[point] / 8), nextHeight = points[point + 1];
+      if (nextFrequency - frequency > 0) {
+        for (let index = frequency; index < nextFrequency; index++) {
+          result[index] = height + Math.trunc(((index - frequency) * (nextHeight - height)) / (nextFrequency - frequency));
+        }
+      }
+      frequency = nextFrequency; height = nextHeight;
+    }
+    return result;
+  })(),
+});
 
 function divide(value, divisor) {
   if (!Number.isSafeInteger(value) || !Number.isSafeInteger(divisor) || divisor <= 0) {
@@ -61,13 +80,14 @@ function signedFlags(value) {
 }
 
 function copyVoice(value) {
-  if (!value || value.sampleRate !== 22050) throw new TypeError('Expected fixed en-us voice state');
+  if (!value || value.sampleRate !== 22050) throw new TypeError('Expected fixed 22050Hz voice state');
   return value;
 }
 
-function readFrame(data, base, offset) {
+function readFrame(data, base, offset, frameCache) {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const at = base + offset;
+  if (frameCache.has(at)) return frameCache.get(at);
   const frame = {
     frflags: view.getInt16(at, true), length: data[at + 16], rms: data[at + 17],
     fheight: [], fwidth: [], fright: [],
@@ -77,18 +97,19 @@ function readFrame(data, base, offset) {
   for (let i = 0; i < 8; i++) frame.fheight.push(data[at + 18 + i]);
   for (let i = 0; i < 6; i++) frame.fwidth.push(data[at + 26 + i]);
   for (let i = 0; i < 3; i++) frame.fright.push(data[at + 32 + i]);
+  frameCache.set(at, frame);
   return frame;
 }
 
-function readSpectrum(data, address) {
+function readSpectrum(data, address, frameCache) {
   if (address <= 0 || address + 4 > data.length) throw new RangeError('Spectrum address outside phondata');
   const base = address + 4;
   const count = Math.min(data[address + 2], C.N_SEQ_FRAMES);
-  const first = readFrame(data, base, 0);
+  const first = readFrame(data, base, 0, frameCache);
   const klatt = (first.frflags & C.FRFLAG_KLATT) !== 0;
   const stride = klatt ? 64 : 44;
   const frames = [];
-  for (let i = 0; i < count; i++) frames.push(readFrame(data, base, i * stride));
+  for (let i = 0; i < count; i++) frames.push(readFrame(data, base, i * stride, frameCache));
   return frames;
 }
 
@@ -99,9 +120,10 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   const voice = copyVoice(options && options.voice);
   const speed = {
     pauseFactor: 193, clausePauseFactor: 193, minPause: 5, wavFactor: 211,
-    lenmodFactor: 0, lenmod2Factor: 100, minSampleLen: 450,
+    lenmodFactor: 110, lenmod2Factor: 100, minSampleLen: 450,
   };
   let queue = [], framePool = [], framePoolIndex = -1, framesBuf = [];
+  const frameCache = new Map();
   let pitchLength = 0, ampLength = 0, lastPitchCommand = -1, lastAmpCommand = -1;
   let lastFrame = null, lastQueueCommand = -1, waveFlag = 0;
   let syllableStart = 0, syllableEnd = 0, syllableCentre = -1, modnFlags = 0;
@@ -250,7 +272,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   }
 
   function lookupSpect(event) {
-    const original = readSpectrum(data, event.fmtAddr);
+    const original = readSpectrum(data, event.fmtAddr, frameCache);
     const frames = [];
     for (let i = 0; i < C.N_SEQ_FRAMES; i++) {
       if (!framesBuf[i]) framesBuf[i] = { frame: null, frflags: 0, length: 0 };
@@ -274,7 +296,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
     const nf1 = nf - 1;
     for (let i = 0; i < nf1; i++) length1 += frames[i].length;
     if (event.fmt2Addr !== 0) {
-      const second = readSpectrum(data, event.fmt2Addr);
+      const second = readSpectrum(data, event.fmt2Addr, frameCache);
       nf--;
       while (nf + second.length > frames.length) frames.push({ frame: null, frflags: 0, length: 0 });
       for (let i = 0; i < second.length; i++) {
@@ -309,14 +331,14 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   function smoothSpect() {
     if (syllableStart === syllableEnd) return;
     if (syllableCentre < 0 || syllableCentre === syllableStart) { syllableStart = syllableEnd; return; }
-    let frame2 = queue[syllableCentre].b, frame;
+    let frame = queue[syllableCentre].b, frame2 = frame;
     for (let ix = syllableCentre - 1;; ix--) {
       const q = queue[ix];
       if (!q || (q.type & 0xff) === C.WCMD_PAUSE || (q.type & 0xff) === C.WCMD_WAVE) break;
       if ((q.type & 0xff) <= C.WCMD_SPECT2) {
         const len = q.a & 0xffff;
-        if (q.c === frame2) { q.c = frame2; frame = frame2; } else break;
-        frame2 = q.b;
+        if (q.c === frame) { q.c = frame2; } else break;
+        frame = frame2 = q.b;
         let modified = false;
         if (frame2.frflags & C.FRFLAG_BREAK) break;
         let allowedLen = len;
@@ -360,13 +382,13 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
           allowed = Math.trunc((allowed * FORMANT_RATE[pk]) / 3000);
           allowed = Math.trunc((allowed * allowedLen) / 256);
           if (diff > allowed) {
-            if (!modified) { frame = copyFrame(frame); modified = true; }
-            frame.ffreq[pk] = q.b.ffreq[pk] + allowed;
-            q.c = frame;
+            if (!modified) { frame2 = copyFrame(frame); modified = true; }
+            frame2.ffreq[pk] = q.b.ffreq[pk] + allowed;
+            q.c = frame2;
           } else if (diff < -allowed) {
-            if (!modified) { frame = copyFrame(frame); modified = true; }
-            frame.ffreq[pk] = q.b.ffreq[pk] - allowed;
-            q.c = frame;
+            if (!modified) { frame2 = copyFrame(frame); modified = true; }
+            frame2.ffreq[pk] = q.b.ffreq[pk] - allowed;
+            q.c = frame2;
           }
         }
       }
@@ -419,7 +441,7 @@ export function createWaveCommandPlanner(phondataBytes, selectedTable, options) 
   }
 
   function doAmplitude(amp, envelope, envelopeBytes) {
-    const commandEnvelope = envelopeBytes ? { envelopeBytes } : envelope === -1 ? null : { envelope };
+    const commandEnvelope = envelopeBytes ? { envelopeBytes } : envelope === null || envelope === -1 ? null : { envelope };
     lastAmpCommand = push(C.WCMD_AMPLITUDE, 0, commandEnvelope, amp);
     ampLength = 0;
   }

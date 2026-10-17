@@ -3,9 +3,14 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createPhonemeTables } from '../src/core/phoneme-table.js';
 import { createPitchCalculator } from '../src/core/calc-pitches.js';
+import { createLengthCalculator } from '../src/core/calc-lengths.js';
+import { createPhonemeListBuffer } from '../src/core/phoneme-interpreter.js';
 import { CMN_PROSODY_PROFILE } from '../data/cmn/prosody-profile.js';
+import { CMN_PROSODY_PROFILE as CMN_LENGTH_PROFILE } from '../data/cmn/synthesis-profile.js';
 
 const phontabPath = new URL('../build/oracle/espeak-ng-data/phontab', import.meta.url);
+const phonindexPath = new URL('../build/oracle/espeak-ng-data/phonindex', import.meta.url);
+const phondataPath = new URL('../build/oracle/espeak-ng-data/phondata', import.meta.url);
 const available = existsSync(phontabPath);
 
 test('cmn tone calculator promotes tone 35 and preserves original pitch endpoints', { skip: !available }, () => {
@@ -36,4 +41,33 @@ test('tone-language dispatch only accepts the reviewed cmn profile', () => {
   const table = { entries: new Array(256) };
   assert.throws(() => createPitchCalculator(table, { toneLanguage: 2 }), /Unsupported tone language/);
   assert.throws(() => createPitchCalculator(table, { toneLanguage: 1 }), /Expected cmn phoneme table/);
+});
+
+test('cmn length calculation uses the original tone pitch envelope', { skip: !available }, () => {
+  const table = createPhonemeTables(readFileSync(phontabPath)).select(8);
+  const list = createPhonemeListBuffer(13);
+  const codes = new Array(13).fill(9), types = new Array(13).fill(0);
+  codes[1] = 50;
+  codes[2] = 37;
+  types[1] = 8;
+  types[2] = 2;
+  for (let index = 0; index < codes.length; index++) {
+    list.phcode[index] = codes[index];
+    list.phonemeId[index] = codes[index] + 1;
+    list.type[index] = types[index];
+  }
+  list.sourceix[1] = 1;
+  list.newword[1] = 13;
+  list.newword[4] = 2;
+  list.synthflags[2] = 4;
+  list.stresslevel[2] = 4;
+  list.tonePh[2] = 115;
+  list.pitch1[2] = 30;
+  list.pitch2[2] = 50;
+  const result = createLengthCalculator(table, CMN_LENGTH_PROFILE, {
+    phonindexBytes: readFileSync(phonindexPath),
+    phondataBytes: readFileSync(phondataPath)
+  }).calculate(list, 9, { list: new Uint32Array(250), index: 0 });
+  assert.equal(result.list.pitch1[1], 14);
+  assert.equal(result.list.pitch2[1], 30);
 });
